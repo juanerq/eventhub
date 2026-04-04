@@ -1,0 +1,2109 @@
+---
+import Layout from "../../layouts/Layout.astro";
+import EventImageUpload from "../../components/EventImageUpload.astro";
+import { getUser } from "../../lib/auth";
+import { supabase } from "../../lib/supabase";
+import "leaflet/dist/leaflet.css";
+
+const user = await getUser(Astro.cookies);
+
+if (!user) {
+  return Astro.redirect("/login");
+}
+
+const isOrganizer = user.user_metadata?.is_organizer || false;
+
+if (!isOrganizer) {
+  return Astro.redirect("/dashboard");
+}
+
+// Get event ID from URL
+const { id } = Astro.params;
+
+if (!id) {
+  return Astro.redirect("/dashboard");
+}
+
+// Fetch event from database
+const { data: event, error } = await supabase
+  .from("events")
+  .select("*")
+  .eq("id", id)
+  .single();
+
+if (error || !event) {
+  console.error("Error fetching event:", error);
+  return Astro.redirect("/dashboard");
+}
+
+// Verify user is the owner
+if (event.organizer_id !== user.id) {
+  return Astro.redirect("/dashboard");
+}
+
+// Fetch ALL images from event_images table (ordered by display_order)
+const { data: eventImages } = await supabase
+  .from("event_images")
+  .select("id, image_url, is_primary, display_order")
+  .eq("event_id", id)
+  .order("display_order", { ascending: true });
+
+// Add image_url to event object for compatibility (primary image)
+const primaryImage = eventImages?.find((img) => img.is_primary);
+event.image_url = primaryImage?.image_url || null;
+event.all_images = eventImages || [];
+
+// Format dates for datetime-local input
+const formatDateForInput = (date: string | null) => {
+  if (!date) return "";
+  const d = new Date(date);
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  const hours = String(d.getHours()).padStart(2, "0");
+  const minutes = String(d.getMinutes()).padStart(2, "0");
+  return `${year}-${month}-${day}T${hours}:${minutes}`;
+};
+---
+
+<Layout title="Editar Evento">
+  <div class="create-event-container">
+    <nav class="navbar">
+      <div class="nav-container">
+        <a href="/dashboard" class="logo">EventHub</a>
+        <a href="/dashboard" class="btn-back">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+            <path
+              d="M12 4l-6 6 6 6"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"></path>
+          </svg>
+          <span>Volver</span>
+        </a>
+      </div>
+    </nav>
+
+    <main class="main-content">
+      <div class="container">
+        <div class="header">
+          <h1>Editar Evento</h1>
+          <p class="subtitle">Actualiza la información de tu evento</p>
+        </div>
+
+        <div class="plan-warning" id="plan-warning" style="display: none;">
+          <div class="warning-icon">⚠️</div>
+          <div class="warning-content">
+            <strong id="warning-title">Límite de plan</strong>
+            <p id="warning-message">Cargando información del plan...</p>
+          </div>
+          <button class="btn-upgrade-inline" id="upgrade-inline"
+            >Actualizar a PRO</button
+          >
+        </div>
+
+        <form id="create-event-form" data-event-id={event.id}>
+          <div class="form-card">
+            <h2 class="section-title">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                <path
+                  d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"></path>
+              </svg>
+              Información Básica
+            </h2>
+
+            <div class="form-row">
+              <div class="form-group full">
+                <label for="title">Nombre del evento *</label>
+                <input
+                  type="text"
+                  id="title"
+                  name="title"
+                  placeholder="ej: Festival de Música Electrónica"
+                  value={event.title}
+                  required
+                />
+                <span class="error-message" id="title-error"></span>
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group full">
+                <label for="description">Descripción</label>
+                <textarea
+                  id="description"
+                  name="description"
+                  rows="4"
+                  placeholder="Describe tu evento, qué pueden esperar los asistentes..."
+                  >{event.description || ""}</textarea
+                >
+                <span class="error-message" id="description-error"></span>
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label for="category">Categoría *</label>
+                <select id="category" name="category" required>
+                  <option value="">Selecciona una categoría</option>
+                  <option
+                    value="concert"
+                    selected={event.category === "concert"}>Concierto</option
+                  >
+                  <option value="party" selected={event.category === "party"}
+                    >Fiesta</option
+                  >
+                  <option value="sports" selected={event.category === "sports"}
+                    >Deportes</option
+                  >
+                  <option
+                    value="workshop"
+                    selected={event.category === "workshop"}
+                    >Taller/Workshop</option
+                  >
+                  <option
+                    value="networking"
+                    selected={event.category === "networking"}
+                    >Networking</option
+                  >
+                  <option
+                    value="conference"
+                    selected={event.category === "conference"}
+                    >Conferencia</option
+                  >
+                  <option
+                    value="exhibition"
+                    selected={event.category === "exhibition"}
+                    >Exposición</option
+                  >
+                  <option
+                    value="theater"
+                    selected={event.category === "theater"}>Teatro</option
+                  >
+                  <option value="other" selected={event.category === "other"}
+                    >Otro</option
+                  >
+                </select>
+                <span class="error-message" id="category-error"></span>
+              </div>
+
+              <div class="form-group">
+                <label for="capacity">Capacidad (opcional)</label>
+                <input
+                  type="number"
+                  id="capacity"
+                  name="capacity"
+                  placeholder="ej: 100"
+                  min="1"
+                  value={event.capacity || ""}
+                />
+                <small class="help-text" id="capacity-help"
+                  >Sin límite establecido</small
+                >
+                <span class="error-message" id="capacity-error"></span>
+              </div>
+            </div>
+          </div>
+
+          <div class="form-card">
+            <h2 class="section-title">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                <rect
+                  x="3"
+                  y="4"
+                  width="18"
+                  height="18"
+                  rx="2"
+                  stroke="currentColor"
+                  stroke-width="2"></rect>
+                <line
+                  x1="16"
+                  y1="2"
+                  x2="16"
+                  y2="6"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"></line>
+                <line
+                  x1="8"
+                  y1="2"
+                  x2="8"
+                  y2="6"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"></line>
+                <line
+                  x1="3"
+                  y1="10"
+                  x2="21"
+                  y2="10"
+                  stroke="currentColor"
+                  stroke-width="2"></line>
+              </svg>
+              Fecha y Hora
+            </h2>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label for="start_date">Fecha y hora de inicio *</label>
+                <input
+                  type="datetime-local"
+                  id="start_date"
+                  name="start_date"
+                  value={formatDateForInput(event.start_date)}
+                  required
+                />
+                <span class="error-message" id="start_date-error"></span>
+              </div>
+
+              <div class="form-group">
+                <label for="end_date">Fecha y hora de fin (opcional)</label>
+                <input
+                  type="datetime-local"
+                  id="end_date"
+                  name="end_date"
+                  value={formatDateForInput(event.end_date)}
+                />
+                <span class="error-message" id="end_date-error"></span>
+              </div>
+            </div>
+          </div>
+
+          <div class="form-card">
+            <h2 class="section-title">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                <path
+                  d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"
+                  stroke="currentColor"
+                  stroke-width="2"></path>
+                <circle
+                  cx="12"
+                  cy="10"
+                  r="3"
+                  stroke="currentColor"
+                  stroke-width="2"></circle>
+              </svg>
+              Ubicación
+            </h2>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label for="location_name">Nombre del lugar</label>
+                <input
+                  type="text"
+                  id="location_name"
+                  name="location_name"
+                  placeholder="ej: Teatro Nacional"
+                  value={event.location_name || ""}
+                />
+                <span class="error-message" id="location_name-error"></span>
+              </div>
+
+              <div class="form-group">
+                <label for="city">Ciudad *</label>
+                <input
+                  type="text"
+                  id="city"
+                  name="city"
+                  placeholder="ej: Bogotá"
+                  value={event.city}
+                  required
+                />
+                <span class="error-message" id="city-error"></span>
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group full">
+                <label for="address">Dirección completa</label>
+                <div class="address-input-group">
+                  <input
+                    type="text"
+                    id="address"
+                    name="address"
+                    placeholder="ej: Calle 45 #12-34, Chapinero"
+                    value={event.address || ""}
+                  />
+                  <button type="button" class="btn-geocode" id="geocode-btn">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                      <path
+                        d="M12 2L12 6M12 18L12 22M22 12L18 12M6 12L2 12M12 12m-3 0a3 3 0 1 0 6 0a3 3 0 1 0 -6 0"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"></path>
+                    </svg>
+                    Obtener coordenadas
+                  </button>
+                </div>
+                <span class="error-message" id="address-error"></span>
+              </div>
+            </div>
+
+            <!-- Interactive Map -->
+            <div id="map-container" style="display: none; margin-top: 1rem;">
+              <div
+                style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem;"
+              >
+                <label style="font-weight: 500; color: var(--text);">
+                  📍 Ajusta la ubicación en el mapa
+                </label>
+                <button type="button" id="reset-map-btn" class="btn-reset-map">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                    <path
+                      d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"></path>
+                    <path
+                      d="M21 3v5h-5M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"></path>
+                    <path
+                      d="M8 16H3v5"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"></path>
+                  </svg>
+                  Recentrar
+                </button>
+              </div>
+              <div
+                id="location-map"
+                style="height: 350px; border-radius: 12px; overflow: hidden; border: 1px solid var(--border);"
+              >
+              </div>
+              <small
+                id="reverse-geocode-status"
+                style="display: none; margin-top: 0.5rem; color: var(--orange-500); font-style: italic;"
+              >
+                🔄 Obteniendo dirección...
+              </small>
+              <small
+                style="display: block; margin-top: 0.5rem; color: var(--text-muted);"
+              >
+                💡 Arrastra el marcador o haz clic en el mapa para ajustar la
+                ubicación
+              </small>
+            </div>
+
+            <input
+              type="hidden"
+              id="latitude"
+              name="latitude"
+              value={event.latitude || ""}
+            />
+            <input
+              type="hidden"
+              id="longitude"
+              name="longitude"
+              value={event.longitude || ""}
+            />
+          </div>
+
+          <div class="form-card">
+            <EventImageUpload existingImages={event.all_images} maxImages={10} />
+          </div>
+
+          <div class="form-card">
+            <h2 class="section-title">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                <line
+                  x1="12"
+                  y1="1"
+                  x2="12"
+                  y2="23"
+                  stroke="currentColor"
+                  stroke-width="2"></line>
+                <path
+                  d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"
+                  stroke="currentColor"
+                  stroke-width="2"></path>
+              </svg>
+              Precio
+            </h2>
+
+            <div class="form-row">
+              <div class="form-group checkbox-group">
+                <label class="checkbox-label">
+                  <input
+                    type="checkbox"
+                    name="is_free"
+                    id="is_free"
+                    checked={event.is_free}
+                  />
+                  <span>Evento gratuito</span>
+                </label>
+              </div>
+            </div>
+
+            <div class="form-row" id="price-row">
+              <div class="form-group">
+                <label for="price">Precio de entrada (COP)</label>
+                <input
+                  type="number"
+                  id="price"
+                  name="price"
+                  placeholder="ej: 50000"
+                  min="0"
+                  step="1000"
+                  value={event.price || 0}
+                />
+                <span class="error-message" id="price-error"></span>
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group checkbox-group">
+                <label class="checkbox-label" id="featured-label">
+                  <input
+                    type="checkbox"
+                    name="is_featured"
+                    id="is_featured"
+                    checked={event.is_featured}
+                    disabled
+                  />
+                  <span
+                    >Marcar como evento destacado
+                    <span class="pro-badge">PRO</span>
+                  </span>
+                </label>
+                <small class="help-text"
+                  >Los eventos destacados aparecen primero en la búsqueda</small
+                >
+              </div>
+            </div>
+          </div>
+
+          <div class="error-message general" id="general-error"></div>
+
+          <div class="form-actions">
+            <button type="submit" class="btn btn-primary">
+              <span>Actualizar evento</span>
+              <svg
+                class="arrow"
+                width="20"
+                height="20"
+                viewBox="0 0 20 20"
+                fill="none"
+              >
+                <path
+                  d="M4 10h12m0 0l-4-4m4 4l-4 4"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"></path>
+              </svg>
+            </button>
+          </div>
+        </form>
+
+        <div class="success-message" id="success-message"></div>
+      </div>
+    </main>
+  </div>
+</Layout>
+
+<style>
+  :root {
+    /* Violet - Primary brand */
+    --violet-50: #faf5ff;
+    --violet-100: #f3e8ff;
+    --violet-200: #e9d5ff;
+    --violet-300: #d8b4fe;
+    --violet-400: #c084fc;
+    --violet-500: #a855f7;
+    --violet-600: #9333ea;
+    --violet-700: #7e22ce;
+    --violet-800: #6b21a8;
+    --violet-900: #581c87;
+    --violet-950: #3b0764;
+
+    /* Fuchsia/Magenta - Energetic accent */
+    --fuchsia-50: #fdf4ff;
+    --fuchsia-100: #fae8ff;
+    --fuchsia-200: #f5d0fe;
+    --fuchsia-300: #f0abfc;
+    --fuchsia-400: #e879f9;
+    --fuchsia-500: #d946ef;
+    --fuchsia-600: #c026d3;
+    --fuchsia-700: #a21caf;
+    --fuchsia-800: #86198f;
+    --fuchsia-900: #701a75;
+
+    /* Orange/Coral - Warm energy */
+    --orange-50: #fff7ed;
+    --orange-100: #ffedd5;
+    --orange-200: #fed7aa;
+    --orange-300: #fdba74;
+    --orange-400: #fb923c;
+    --orange-500: #f97316;
+    --orange-600: #ea580c;
+    --orange-700: #c2410c;
+    --orange-800: #9a3412;
+    --orange-900: #7c2d12;
+
+    /* Cyan - Cool highlight */
+    --cyan-50: #ecfeff;
+    --cyan-100: #cffafe;
+    --cyan-200: #a5f3fc;
+    --cyan-300: #67e8f9;
+    --cyan-400: #22d3ee;
+    --cyan-500: #06b6d4;
+    --cyan-600: #0891b2;
+    --cyan-700: #0e7490;
+    --cyan-800: #155e75;
+    --cyan-900: #164e63;
+
+    /* Emerald/Green - Success & Growth */
+    --emerald-50: #ecfdf5;
+    --emerald-100: #d1fae5;
+    --emerald-200: #a7f3d0;
+    --emerald-300: #6ee7b7;
+    --emerald-400: #34d399;
+    --emerald-500: #10b981;
+    --emerald-600: #059669;
+    --emerald-700: #047857;
+    --emerald-800: #065f46;
+    --emerald-900: #064e3b;
+
+    /* Deep Blue/Navy - Professional dark */
+    --navy-50: #f0f9ff;
+    --navy-100: #e0f2fe;
+    --navy-200: #bae6fd;
+    --navy-300: #7dd3fc;
+    --navy-400: #38bdf8;
+    --navy-500: #0ea5e9;
+    --navy-600: #0284c7;
+    --navy-700: #0369a1;
+    --navy-800: #075985;
+    --navy-900: #0c4a6e;
+    --navy-950: #082f49;
+
+    /* Extended neutrals */
+    --slate-50: #f8fafc;
+    --slate-100: #f1f5f9;
+    --slate-200: #e2e8f0;
+    --slate-300: #cbd5e1;
+    --slate-400: #94a3b8;
+    --slate-500: #64748b;
+    --slate-600: #475569;
+    --slate-700: #334155;
+    --slate-800: #1e293b;
+    --slate-900: #0f172a;
+    --slate-950: #020617;
+
+    /* Semantic tokens */
+    --primary: var(--violet-600);
+    --primary-hover: var(--violet-700);
+    --primary-dark: var(--violet-700);
+    --secondary: var(--fuchsia-500);
+    --accent: var(--fuchsia-500);
+    --accent-hover: var(--fuchsia-600);
+    --warm-accent: var(--orange-500);
+    --cool-accent: var(--cyan-400);
+    --dark: var(--slate-950);
+    --dark-light: var(--slate-900);
+    --background: var(--slate-950);
+    --background-light: var(--slate-900);
+    --text: var(--slate-50);
+    --text-muted: var(--slate-400);
+    --success: var(--emerald-500);
+    --border: rgba(255, 255, 255, 0.08);
+  }
+
+  .create-event-container {
+    min-height: 100vh;
+    background: linear-gradient(135deg, #020617 0%, #0c4a6e 50%, #1e293b 100%);
+  }
+
+  .navbar {
+    background: rgba(37, 37, 64, 0.8);
+    backdrop-filter: blur(20px);
+    border-bottom: 1px solid var(--border);
+    padding: 1.25rem 0;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+
+  .nav-container {
+    max-width: 1000px;
+    margin: 0 auto;
+    padding: 0 2rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .logo {
+    font-size: 1.5rem;
+    font-weight: 800;
+    background: linear-gradient(
+      135deg,
+      var(--primary) 0%,
+      var(--secondary) 100%
+    );
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    text-decoration: none;
+  }
+
+  .btn-back {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    text-decoration: none;
+    font-weight: 500;
+    transition: all 0.2s ease;
+  }
+
+  .btn-back:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: var(--primary);
+  }
+
+  .main-content {
+    padding: 3rem 0;
+  }
+
+  .container {
+    max-width: 1000px;
+    margin: 0 auto;
+    padding: 0 2rem;
+  }
+
+  .header {
+    text-align: center;
+    margin-bottom: 3rem;
+    animation: fadeInUp 0.6s ease;
+  }
+
+  @keyframes fadeInUp {
+    from {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .header h1 {
+    font-size: 2.5rem;
+    font-weight: 800;
+    color: var(--text);
+    margin-bottom: 0.5rem;
+  }
+
+  .subtitle {
+    color: var(--text-muted);
+    font-size: 1.1rem;
+  }
+
+  .form-card {
+    background: rgba(37, 37, 64, 0.6);
+    backdrop-filter: blur(20px);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 2rem;
+    margin-bottom: 2rem;
+    animation: fadeInUp 0.6s ease;
+    animation-fill-mode: both;
+  }
+
+  .form-card:nth-child(2) {
+    animation-delay: 0.1s;
+  }
+
+  .form-card:nth-child(3) {
+    animation-delay: 0.2s;
+  }
+
+  .form-card:nth-child(4) {
+    animation-delay: 0.3s;
+  }
+
+  .form-card:nth-child(5) {
+    animation-delay: 0.4s;
+  }
+
+  .section-title {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--text);
+    margin-bottom: 1.5rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .section-title svg {
+    color: var(--primary);
+  }
+
+  .form-row {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1.5rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .form-row:last-child {
+    margin-bottom: 0;
+  }
+
+  .form-group {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .form-group.full {
+    grid-column: 1 / -1;
+  }
+
+  label {
+    display: block;
+    margin-bottom: 0.5rem;
+    color: var(--text);
+    font-weight: 500;
+    font-size: 0.9rem;
+  }
+
+  input[type="text"],
+  input[type="number"],
+  input[type="datetime-local"],
+  select,
+  textarea {
+    width: 100%;
+    padding: 0.875rem 1rem;
+    background: rgba(0, 0, 0, 0.3);
+    border: 1.5px solid var(--border);
+    border-radius: 12px;
+    color: var(--text);
+    font-size: 1rem;
+    font-family: "Outfit", system-ui, sans-serif;
+    transition: all 0.3s ease;
+  }
+
+  textarea {
+    resize: vertical;
+    min-height: 100px;
+  }
+
+  input:focus,
+  select:focus,
+  textarea:focus {
+    outline: none;
+    border-color: var(--primary);
+    background: rgba(0, 0, 0, 0.4);
+    box-shadow: 0 0 0 3px rgba(255, 107, 53, 0.1);
+  }
+
+  input.error,
+  select.error,
+  textarea.error {
+    border-color: #ef4444;
+    background: rgba(239, 68, 68, 0.1);
+  }
+
+  input.error:focus,
+  select.error:focus,
+  textarea.error:focus {
+    border-color: #ef4444;
+    box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1);
+  }
+
+  input::placeholder,
+  textarea::placeholder {
+    color: var(--text-muted);
+  }
+
+  select {
+    cursor: pointer;
+  }
+
+  .address-input-group {
+    display: flex;
+    gap: 0.5rem;
+    align-items: flex-start;
+  }
+
+  .address-input-group input {
+    flex: 1;
+  }
+
+  .btn-geocode {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.875rem 1rem;
+    background: linear-gradient(135deg, var(--violet-600), var(--violet-700));
+    border: 1px solid rgba(147, 51, 234, 0.3);
+    border-radius: 12px;
+    color: white;
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  .btn-geocode:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(147, 51, 234, 0.4);
+  }
+
+  .btn-geocode:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
+  .btn-geocode svg {
+    flex-shrink: 0;
+  }
+
+  .btn-geocode .spinner {
+    animation: spin 1s linear infinite;
+  }
+
+  @keyframes spin {
+    from {
+      transform: rotate(0deg);
+    }
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  .btn-reset-map {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.5rem 0.875rem;
+    background: rgba(147, 51, 234, 0.1);
+    border: 1px solid rgba(147, 51, 234, 0.2);
+    border-radius: 8px;
+    color: var(--violet-600);
+    font-size: 0.8125rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .btn-reset-map:hover {
+    background: rgba(147, 51, 234, 0.15);
+    border-color: rgba(147, 51, 234, 0.3);
+    transform: translateY(-1px);
+  }
+
+  .btn-reset-map svg {
+    flex-shrink: 0;
+  }
+
+  #location-map {
+    background: var(--background-light);
+    z-index: 1;
+    position: relative;
+  }
+
+  #map-container {
+    position: relative;
+    width: 100%;
+  }
+
+  /* Leaflet marker adjustments */
+  :global(.leaflet-container) {
+    font-family: "Outfit", system-ui, sans-serif;
+    height: 350px !important;
+    width: 100% !important;
+    z-index: 1;
+  }
+
+  :global(.leaflet-pane) {
+    z-index: 400;
+  }
+
+  :global(.leaflet-tile-pane) {
+    z-index: 200;
+  }
+
+  :global(.leaflet-overlay-pane) {
+    z-index: 400;
+  }
+
+  :global(.leaflet-shadow-pane) {
+    z-index: 500;
+  }
+
+  :global(.leaflet-marker-pane) {
+    z-index: 600;
+  }
+
+  :global(.leaflet-tooltip-pane) {
+    z-index: 650;
+  }
+
+  :global(.leaflet-popup-pane) {
+    z-index: 700;
+  }
+
+  :global(.leaflet-control) {
+    z-index: 800;
+  }
+
+  :global(.leaflet-popup-content-wrapper) {
+    background: var(--background-light);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+  }
+
+  :global(.leaflet-popup-tip) {
+    background: var(--background-light);
+  }
+
+  :global(.leaflet-control-attribution) {
+    background: rgba(15, 23, 42, 0.8) !important;
+    color: var(--text-muted) !important;
+    font-size: 0.7rem !important;
+  }
+
+  :global(.leaflet-control-attribution a) {
+    color: var(--violet-400) !important;
+  }
+
+  .checkbox-group {
+    margin: 0.5rem 0;
+  }
+
+  .checkbox-label {
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+    font-weight: 500;
+    gap: 0.75rem;
+    color: var(--text);
+  }
+
+  input[type="checkbox"] {
+    width: 20px;
+    height: 20px;
+    cursor: pointer;
+    accent-color: var(--primary);
+  }
+
+  .error-message {
+    display: block;
+    color: #ef4444;
+    font-size: 0.875rem;
+    margin-top: 0.5rem;
+    min-height: 1.25rem;
+    animation: shake 0.3s ease;
+  }
+
+  .error-message.general {
+    margin: 1.5rem 0;
+    padding: 0.75rem 1rem;
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    border-radius: 8px;
+    text-align: center;
+  }
+
+  .error-message:empty,
+  .error-message.general:empty {
+    display: none;
+  }
+
+  @keyframes shake {
+    0%,
+    100% {
+      transform: translateX(0);
+    }
+    25% {
+      transform: translateX(-5px);
+    }
+    75% {
+      transform: translateX(5px);
+    }
+  }
+
+  .form-actions {
+    display: flex;
+    gap: 1rem;
+    justify-content: flex-end;
+    margin-top: 2rem;
+    animation: fadeInUp 0.6s ease 0.5s;
+    animation-fill-mode: both;
+  }
+
+  .btn {
+    padding: 1rem 2rem;
+    border: none;
+    border-radius: 12px;
+    font-weight: 600;
+    font-size: 1rem;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .btn-primary {
+    background: linear-gradient(
+      135deg,
+      var(--primary) 0%,
+      var(--primary-dark) 100%
+    );
+    color: white;
+    box-shadow: 0 4px 20px rgba(255, 107, 53, 0.4);
+  }
+
+  .btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 30px rgba(255, 107, 53, 0.5);
+  }
+
+  .btn-primary:active {
+    transform: translateY(0);
+  }
+
+  .btn-primary:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+  }
+
+  .btn-secondary {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--border);
+    color: var(--text);
+  }
+
+  .btn-secondary:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: var(--primary);
+  }
+
+  .arrow {
+    transition: transform 0.3s ease;
+  }
+
+  .btn:hover .arrow {
+    transform: translateX(4px);
+  }
+
+  .success-message {
+    margin-top: 2rem;
+    padding: 1rem 1.25rem;
+    background: rgba(34, 197, 94, 0.1);
+    border: 1px solid rgba(34, 197, 94, 0.3);
+    border-radius: 12px;
+    color: #22c55e;
+    text-align: center;
+    font-size: 0.95rem;
+    animation: slideDown 0.4s ease;
+  }
+
+  .success-message:empty {
+    display: none;
+  }
+
+  @keyframes slideDown {
+    from {
+      opacity: 0;
+      transform: translateY(-10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @media (max-width: 768px) {
+    .form-row {
+      grid-template-columns: 1fr;
+    }
+
+    .nav-container {
+      padding: 0 1rem;
+    }
+
+    .container {
+      padding: 0 1rem;
+    }
+
+    .header h1 {
+      font-size: 2rem;
+    }
+
+    .form-card {
+      padding: 1.5rem;
+    }
+
+    .form-actions {
+      flex-direction: column-reverse;
+    }
+
+    .btn {
+      width: 100%;
+      justify-content: center;
+    }
+  }
+
+  .plan-warning {
+    background: rgba(255, 152, 0, 0.1);
+    border: 1px solid rgba(255, 152, 0, 0.3);
+    border-radius: 12px;
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    animation: slideDown 0.3s ease;
+  }
+
+  @keyframes slideDown {
+    from {
+      opacity: 0;
+      transform: translateY(-10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .warning-icon {
+    font-size: 2rem;
+    flex-shrink: 0;
+  }
+
+  .warning-content {
+    flex: 1;
+  }
+
+  .warning-content strong {
+    color: var(--text);
+    display: block;
+    margin-bottom: 0.25rem;
+  }
+
+  .warning-content p {
+    color: var(--text-muted);
+    font-size: 0.9rem;
+    margin: 0;
+  }
+
+  .btn-upgrade-inline {
+    padding: 0.75rem 1.5rem;
+    background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%);
+    border: none;
+    border-radius: 8px;
+    color: white;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: transform 0.2s ease;
+  }
+
+  .btn-upgrade-inline:hover {
+    transform: translateY(-2px);
+  }
+
+  .pro-badge {
+    display: inline-block;
+    padding: 0.2rem 0.5rem;
+    background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%);
+    border-radius: 4px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: white;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-left: 0.5rem;
+  }
+
+  .help-text {
+    display: block;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    margin-top: 0.5rem;
+  }
+
+  .checkbox-label {
+    cursor: pointer;
+  }
+
+  .checkbox-label input:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .checkbox-label input:disabled ~ span {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
+  /* File Upload Styles */
+  .file-upload-wrapper {
+    position: relative;
+  }
+
+  .file-input-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border-width: 0;
+  }
+
+  .file-upload-area {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 1.5rem 1.5rem;
+    background: rgba(255, 255, 255, 0.03);
+    border: 2px dashed var(--border);
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .file-upload-area::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, var(--violet-600), var(--fuchsia-600));
+    opacity: 0;
+    transition: opacity 0.3s ease;
+  }
+
+  .file-upload-area:hover::before {
+    opacity: 0.05;
+  }
+
+  .file-upload-area:hover {
+    border-color: var(--primary);
+    background: rgba(147, 51, 234, 0.05);
+    transform: translateY(-2px);
+  }
+
+  .file-upload-area:active {
+    transform: translateY(0);
+  }
+
+  .file-upload-area.drag-over {
+    border-color: var(--accent);
+    background: rgba(217, 70, 239, 0.1);
+    transform: scale(1.02);
+  }
+
+  .file-upload-icon {
+    margin-bottom: 0.5rem;
+    color: var(--primary);
+    transition: all 0.3s ease;
+    position: relative;
+    z-index: 1;
+  }
+  
+  .file-upload-icon svg {
+    width: 32px;
+    height: 32px;
+  }
+
+  .file-upload-area:hover .file-upload-icon {
+    color: var(--accent);
+    transform: translateY(-2px);
+  }
+
+  .file-upload-text {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.25rem;
+    margin-bottom: 0.5rem;
+    position: relative;
+    z-index: 1;
+  }
+
+  .file-upload-title {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  .file-upload-subtitle {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+  }
+
+  .file-upload-specs {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    padding: 0.375rem 0.75rem;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 16px;
+    position: relative;
+    z-index: 1;
+  }
+
+  .file-input-help {
+    margin-top: 0.5rem;
+  }
+
+  .image-preview {
+    position: relative;
+    margin-top: 1rem;
+    border-radius: 12px;
+    overflow: hidden;
+    max-width: 400px;
+  }
+
+  .image-preview img {
+    width: 100%;
+    height: auto;
+    display: block;
+    border-radius: 12px;
+  }
+
+  .btn-remove-image {
+    position: absolute;
+    top: 0.5rem;
+    right: 0.5rem;
+    width: 32px;
+    height: 32px;
+    background: rgba(0, 0, 0, 0.7);
+    border: none;
+    border-radius: 50%;
+    color: white;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+  }
+
+  .btn-remove-image:hover {
+    background: #e74c3c;
+    transform: scale(1.1);
+  }
+
+  /* Estilos para galería de imágenes */
+  .images-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+  }
+
+  .image-item {
+    position: relative;
+    width: 150px;
+    min-width: 150px;
+    max-width: 150px;
+    height: 150px;
+    min-height: 150px;
+    max-height: 150px;
+    border-radius: 12px;
+    overflow: hidden;
+    background: rgba(255, 255, 255, 0.03);
+    border: 2px solid var(--border);
+    flex-shrink: 0;
+    transition: all 0.2s ease;
+  }
+
+  .image-item:hover {
+    transform: scale(1.02);
+    border-color: var(--primary);
+    box-shadow: 0 4px 12px rgba(147, 51, 234, 0.3);
+  }
+
+  .image-item img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .image-item .primary-badge {
+    position: absolute;
+    top: 0.5rem;
+    left: 0.5rem;
+    background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%);
+    color: white;
+    font-size: 0.7rem;
+    padding: 0.25rem 0.5rem;
+    border-radius: 6px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  }
+
+  .image-item .btn-remove-existing {
+    position: absolute;
+    top: 0.5rem;
+    right: 0.5rem;
+    width: 28px;
+    height: 28px;
+    background: rgba(0, 0, 0, 0.8);
+    border: none;
+    border-radius: 50%;
+    color: white;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: all 0.2s ease;
+    backdrop-filter: blur(4px);
+  }
+
+  .image-item .btn-remove-new {
+    position: absolute;
+    top: 0.5rem;
+    right: 0.5rem;
+    width: 28px;
+    height: 28px;
+    background: rgba(0, 0, 0, 0.8);
+    border: none;
+    border-radius: 50%;
+    color: white;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: all 0.2s ease;
+    backdrop-filter: blur(4px);
+  }
+
+  .image-item:hover .btn-remove-existing,
+  .image-item:hover .btn-remove-new {
+    opacity: 1;
+  }
+
+  .image-item .btn-remove-existing:hover,
+  .image-item .btn-remove-new:hover {
+    background: #e74c3c;
+    transform: scale(1.1);
+  }
+
+  @media (max-width: 768px) {
+    .image-item {
+      width: 120px;
+      min-width: 120px;
+      max-width: 120px;
+      height: 120px;
+      min-height: 120px;
+      max-height: 120px;
+    }
+  }
+
+  .image-count {
+    font-size: 0.9rem;
+    color: var(--text-muted);
+    font-weight: 400;
+    margin-left: 0.5rem;
+  }
+
+  @media (max-width: 768px) {
+    .address-input-group {
+      flex-direction: column;
+    }
+
+    .btn-geocode {
+      width: 100%;
+      justify-content: center;
+    }
+  }
+</style>
+
+<script>
+  import {
+    geocodeAddress,
+    reverseGeocodeDetailed,
+  } from "../../lib/geolocation";
+  // @ts-ignore - Leaflet types are for client-side only
+  import L from "leaflet";
+
+  // Fix Leaflet default icon path issues
+  delete (L.Icon.Default.prototype as any)._getIconUrl;
+  L.Icon.Default.mergeOptions({
+    iconRetinaUrl:
+      "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png",
+    iconUrl:
+      "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png",
+    shadowUrl:
+      "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png",
+  });
+
+  // Geocode button handler
+  const geocodeBtn = document.getElementById("geocode-btn");
+  const locationNameInput = document.getElementById(
+    "location_name",
+  ) as HTMLInputElement;
+  const addressInput = document.getElementById("address") as HTMLInputElement;
+  const cityInput = document.getElementById("city") as HTMLInputElement;
+  const latitudeInput = document.getElementById("latitude") as HTMLInputElement;
+  const longitudeInput = document.getElementById(
+    "longitude",
+  ) as HTMLInputElement;
+  const mapContainer = document.getElementById("map-container");
+  const resetMapBtn = document.getElementById("reset-map-btn");
+
+  // Map variables
+  let map: L.Map | null = null;
+  let marker: L.Marker | null = null;
+  let initialCoords: { lat: number; lng: number } | null = null;
+
+  // Initialize interactive map
+  function initializeMap(lat: number, lng: number) {
+    const mapElement = document.getElementById("location-map");
+    if (!mapElement) return;
+
+    // Store initial coordinates
+    initialCoords = { lat, lng };
+
+    // Clear existing map if any
+    if (map) {
+      map.remove();
+    }
+
+    // Create map
+    map = L.map("location-map").setView([lat, lng], 16);
+
+    // Add tile layer (OpenStreetMap)
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      attribution: "© OpenStreetMap contributors",
+      maxZoom: 19,
+    }).addTo(map);
+
+    // Add draggable marker
+    marker = L.marker([lat, lng], {
+      draggable: true,
+      autoPan: true,
+    }).addTo(map);
+
+    // Add popup to marker
+    marker
+      .bindPopup(
+        `
+      <div style="text-align: center; padding: 0.5rem;">
+        <strong style="color: var(--violet-600);">📍 Ubicación del evento</strong><br/>
+        <small style="color: var(--text-muted);">Arrastra para ajustar</small>
+      </div>
+    `,
+      )
+      .openPopup();
+
+    // Update coordinates when marker is dragged
+    marker.on("dragend", function (event: any) {
+      const position = event.target.getLatLng();
+      updateCoordinates(position.lat, position.lng);
+    });
+
+    // Update coordinates when clicking on map
+    map.on("click", function (event: any) {
+      const { lat, lng } = event.latlng;
+      if (marker) {
+        marker.setLatLng([lat, lng]);
+        updateCoordinates(lat, lng);
+      }
+    });
+
+    // Show map container
+    if (mapContainer) {
+      mapContainer.style.display = "block";
+      // Force Leaflet to recalculate map size after showing container
+      setTimeout(() => {
+        if (map) {
+          map.invalidateSize();
+        }
+      }, 100);
+    }
+  }
+
+  // Update coordinates display and reverse geocode
+  async function updateCoordinates(lat: number, lng: number) {
+    // Update coordinates
+    if (latitudeInput) latitudeInput.value = lat.toString();
+    if (longitudeInput) longitudeInput.value = lng.toString();
+
+    // Show loading indicator
+    const statusElement = document.getElementById("reverse-geocode-status");
+    if (statusElement) {
+      statusElement.style.display = "block";
+    }
+
+    // Reverse geocode to get address
+    try {
+      const result = await reverseGeocodeDetailed(lat, lng);
+      if (result) {
+        // Update form fields with new address (always update, even if empty)
+        if (locationNameInput) {
+          // Only update if we have a meaningful location name
+          if (result.locationName) {
+            locationNameInput.value = result.locationName;
+          }
+        }
+        // Always update city and address to ensure consistency
+        if (cityInput) {
+          cityInput.value = result.city || "";
+        }
+        if (addressInput) {
+          addressInput.value = result.address || "";
+        }
+      }
+    } catch (error) {
+      console.error("Error al obtener dirección:", error);
+    } finally {
+      // Hide loading indicator after 500ms
+      if (statusElement) {
+        setTimeout(() => {
+          statusElement.style.display = "none";
+        }, 500);
+      }
+    }
+  }
+
+  // Reset map to initial coordinates
+  resetMapBtn?.addEventListener("click", () => {
+    if (map && marker && initialCoords) {
+      map.setView([initialCoords.lat, initialCoords.lng], 16);
+      marker.setLatLng([initialCoords.lat, initialCoords.lng]);
+      updateCoordinates(initialCoords.lat, initialCoords.lng);
+    }
+  });
+
+  // Show existing coordinates if available
+  if (latitudeInput?.value && longitudeInput?.value) {
+    const lat = parseFloat(latitudeInput.value);
+    const lng = parseFloat(longitudeInput.value);
+
+    if (geocodeBtn) {
+      geocodeBtn.innerHTML = `
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+          <path d="M20 6L9 17l-5-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        Coordenadas obtenidas
+      `;
+    }
+
+    // Show map with existing coordinates
+    if (!isNaN(lat) && !isNaN(lng)) {
+      initializeMap(lat, lng);
+    }
+  }
+
+  // Function to reset geocode button when address changes
+  function resetGeocodeButton() {
+    if (geocodeBtn) {
+      geocodeBtn.removeAttribute("disabled");
+      geocodeBtn.innerHTML = `
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+          <path d="M12 2L12 6M12 18L12 22M22 12L18 12M6 12L2 12M12 12m-3 0a3 3 0 1 0 6 0a3 3 0 1 0 -6 0" 
+            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        Obtener coordenadas
+      `;
+    }
+    // Don't hide map - let user continue adjusting manually
+  }
+
+  // Listen for changes in geocoding-relevant inputs
+  locationNameInput?.addEventListener("input", resetGeocodeButton);
+  addressInput?.addEventListener("input", resetGeocodeButton);
+  cityInput?.addEventListener("input", resetGeocodeButton);
+
+  geocodeBtn?.addEventListener("click", async () => {
+    const address = addressInput?.value.trim();
+    const city = cityInput?.value.trim();
+
+    if (!address && !city) {
+      alert("Por favor ingresa al menos una dirección o ciudad");
+      return;
+    }
+
+    // Warn user if address is too generic
+    const isGenericTerm =
+      address && /^(parque|plaza|iglesia|centro|estadio)$/i.test(address);
+
+    geocodeBtn.setAttribute("disabled", "true");
+    geocodeBtn.innerHTML = `
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" class="spinner">
+        <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" fill="none" opacity="0.25"/>
+        <path d="M12 2 A10 10 0 0 1 22 12" stroke="currentColor" stroke-width="2" fill="none"/>
+      </svg>
+      Buscando...
+    `;
+
+    // Use improved geocoding with structured search
+    const coordinates = await geocodeAddress(address || "", city, "Colombia");
+
+    if (coordinates) {
+      latitudeInput.value = coordinates.latitude.toString();
+      longitudeInput.value = coordinates.longitude.toString();
+
+      geocodeBtn.innerHTML = `
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+          <path d="M20 6L9 17l-5-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        Coordenadas obtenidas
+      `;
+
+      // Initialize interactive map
+      initializeMap(coordinates.latitude, coordinates.longitude);
+    } else {
+      let errorMessage = "No se encontró la ubicación.";
+
+      if (isGenericTerm) {
+        errorMessage += ` El término "${address}" es muy genérico. Intenta agregar más detalles como:\n- "${address} principal"\n- "${address} de la ciudad"\n- Una dirección específica`;
+      } else if (!city) {
+        errorMessage += " Por favor especifica la ciudad.";
+      } else {
+        errorMessage += ` Verifica que la dirección exista en ${city}.`;
+      }
+
+      alert(errorMessage);
+      geocodeBtn.removeAttribute("disabled");
+      geocodeBtn.innerHTML = `
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+          <path d="M12 2L12 6M12 18L12 22M22 12L18 12M6 12L2 12M12 12m-3 0a3 3 0 1 0 6 0a3 3 0 1 0 -6 0" 
+            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        Obtener coordenadas
+      `;
+    }
+  });
+
+  const form = document.getElementById("create-event-form");
+  const isFreeCheckbox = document.getElementById("is_free") as HTMLInputElement;
+  const priceRow = document.getElementById("price-row");
+  const priceInput = document.getElementById("price") as HTMLInputElement;
+
+  let planStats: any = null;
+
+  // Cargar estadísticas del plan
+  async function loadPlanStats() {
+    try {
+      const response = await fetch("/api/user/plan-stats");
+      const data = await response.json();
+
+      if (data.success && data.stats) {
+        planStats = data.stats;
+        updateUIWithPlanLimits();
+      }
+    } catch (error) {
+      console.error("Error loading plan stats:", error);
+    }
+  }
+
+  function updateUIWithPlanLimits() {
+    if (!planStats) return;
+
+    // Actualizar límite de capacidad
+    const capacityInput = document.getElementById(
+      "capacity",
+    ) as HTMLInputElement;
+    const capacityHelp = document.getElementById("capacity-help");
+
+    if (
+      capacityInput &&
+      capacityHelp &&
+      planStats.max_capacity_per_event !== null
+    ) {
+      capacityInput.max = planStats.max_capacity_per_event;
+      capacityHelp.textContent = `Máximo ${planStats.max_capacity_per_event} personas para tu plan`;
+    } else if (capacityHelp) {
+      capacityHelp.textContent = "Sin límite de capacidad";
+    }
+
+    // Habilitar/deshabilitar eventos destacados
+    const featuredCheckbox = document.getElementById(
+      "is_featured",
+    ) as HTMLInputElement;
+    if (featuredCheckbox) {
+      if (planStats.can_feature_events) {
+        featuredCheckbox.disabled = false;
+      } else {
+        featuredCheckbox.disabled = true;
+        featuredCheckbox.checked = false;
+      }
+    }
+
+    // Mostrar advertencia si está cerca del límite de eventos
+    const planWarning = document.getElementById("plan-warning");
+    const warningTitle = document.getElementById("warning-title");
+    const warningMessage = document.getElementById("warning-message");
+
+    if (planStats.max_events_per_month !== null) {
+      const eventsUsed = planStats.current_events_this_month || 0;
+      const eventsMax = planStats.max_events_per_month;
+      const eventsRemaining = eventsMax - eventsUsed;
+
+      if (eventsRemaining <= 0) {
+        planWarning!.style.display = "flex";
+        warningTitle!.textContent = "❌ Has alcanzado tu límite";
+        warningMessage!.textContent = `Has creado ${eventsUsed}/${eventsMax} eventos este mes. Actualiza a PRO para eventos ilimitados.`;
+
+        // Deshabilitar el formulario
+        const submitBtn = form?.querySelector(
+          'button[type="submit"]',
+        ) as HTMLButtonElement;
+        if (submitBtn) {
+          submitBtn.disabled = true;
+          submitBtn.textContent = "Límite alcanzado";
+        }
+      } else if (eventsRemaining <= 1) {
+        planWarning!.style.display = "flex";
+        warningTitle!.textContent = "⚠️ Último evento disponible";
+        warningMessage!.textContent = `Te queda ${eventsRemaining} evento${eventsRemaining === 1 ? "" : "s"} de ${eventsMax} este mes. Considera actualizar a PRO.`;
+      }
+    }
+
+    // Actualizar stats del imageHandler
+    if (imageHandler) {
+      imageHandler.setPlanStats(planStats);
+    }
+
+    // Configurar botón de upgrade
+    const upgradeBtn = document.getElementById("upgrade-inline");
+    upgradeBtn?.addEventListener("click", () => {
+      alert(
+        "Próximamente: Actualizar a PRO por $20.000.000/mes\n\n✨ Eventos ilimitados\n✨ Capacidad ilimitada\n✨ Eventos destacados",
+      );
+    });
+  }
+
+  // Validar límites al enviar
+  function validatePlanLimits(): boolean {
+    if (!planStats) return true;
+
+    // Validar capacidad
+    const capacityInput = document.getElementById(
+      "capacity",
+    ) as HTMLInputElement;
+    if (capacityInput && capacityInput.value) {
+      const capacity = parseInt(capacityInput.value);
+      if (
+        planStats.max_capacity_per_event !== null &&
+        capacity > planStats.max_capacity_per_event
+      ) {
+        showError(
+          "capacity",
+          `La capacidad máxima para tu plan es ${planStats.max_capacity_per_event} personas`,
+        );
+        return false;
+      }
+    }
+
+    // Validar eventos destacados
+    const featuredCheckbox = document.getElementById(
+      "is_featured",
+    ) as HTMLInputElement;
+    if (
+      featuredCheckbox &&
+      featuredCheckbox.checked &&
+      !planStats.can_feature_events
+    ) {
+      showGeneralError("Solo los usuarios PRO pueden destacar eventos");
+      return false;
+    }
+
+    return true;
+  }
+
+  // Cargar estadísticas al inicio
+  loadPlanStats();
+
+  // ============================================
+  // MANEJO DE MÚLTIPLES IMÁGENES
+  // ============================================
+  // Manejo de imágenes con EventImageHandler
+  // ============================================
+  import { EventImageHandler } from "../../lib/eventImageHandler";
+  
+  // Primero definir las funciones de error
+  function showError(inputId: string, message: string) {
+    const input = document.getElementById(inputId);
+    const errorElement = document.getElementById(inputId + "-error");
+
+    if (input) {
+      input.classList.add("error");
+      input.focus();
+    }
+    if (errorElement) {
+      errorElement.textContent = message;
+    }
+  }
+
+  function clearAllErrors() {
+    const inputs = form?.querySelectorAll("input, select, textarea");
+    inputs?.forEach((input) => input.classList.remove("error"));
+
+    const errorMessages = form?.querySelectorAll(".error-message");
+    errorMessages?.forEach((msg) => (msg.textContent = ""));
+  }
+
+  // Ahora inicializar el EventImageHandler
+  const imageHandler = new EventImageHandler({
+    showError,
+    clearErrors: clearAllErrors,
+  });
+
+  // Toggle price field based on "free" checkbox
+  isFreeCheckbox?.addEventListener("change", () => {
+    if (isFreeCheckbox.checked) {
+      priceRow!.style.display = "none";
+      priceInput.value = "0";
+      priceInput.required = false;
+    } else {
+      priceRow!.style.display = "block";
+      priceInput.required = false;
+    }
+  });
+
+  // Clear errors on input
+  function setupErrorClear() {
+    const inputs = form?.querySelectorAll("input, select, textarea");
+    inputs?.forEach((input) => {
+      input.addEventListener("input", () => {
+        input.classList.remove("error");
+        const errorId = input.id + "-error";
+        const errorElement = document.getElementById(errorId);
+        if (errorElement) errorElement.textContent = "";
+      });
+    });
+  }
+
+  function showGeneralError(message: string) {
+    const errorElement = document.getElementById("general-error");
+    if (errorElement) {
+      errorElement.textContent = message;
+    }
+  }
+
+  function showSuccess(message: string) {
+    const successElement = document.getElementById("success-message");
+    if (successElement) {
+      successElement.textContent = message;
+      setTimeout(() => {
+        window.location.href = "/dashboard";
+      }, 2000);
+    }
+  }
+
+  async function submitEvent() {
+    clearAllErrors();
+
+    // Validar límites del plan antes de enviar
+    if (!validatePlanLimits()) {
+      return;
+    }
+
+    const formData = new FormData(form as HTMLFormElement);
+
+    // Eliminar el campo event_images que viene del form (evitar duplicados)
+    formData.delete("event_images");
+
+    // Obtener archivos del imageHandler
+    const newFiles = imageHandler.getFiles();
+    const imagesToRemove = imageHandler.getImagesToRemove();
+    
+    console.log("📸 Nuevas imágenes a subir:", newFiles.length);
+    console.log("🗑️ Imágenes a eliminar:", imagesToRemove);
+
+    // Agregar las nuevas imágenes al FormData
+    newFiles.forEach((file) => {
+      formData.append("event_images", file);
+    });
+
+    // Agregar IDs de imágenes a eliminar
+    if (imagesToRemove.length > 0) {
+      formData.append("images_to_remove", imagesToRemove.join(","));
+    }
+
+    // Add event ID
+    const eventId = form?.getAttribute("data-event-id");
+    if (eventId) {
+      formData.append("id", eventId);
+    }
+
+    // Add status as published
+    formData.set("status", "published");
+
+    // Ensure is_free is set correctly
+    const isFreeCheckbox = document.getElementById(
+      "is_free",
+    ) as HTMLInputElement;
+    formData.set("is_free", isFreeCheckbox?.checked ? "true" : "false");
+
+    // If is_free is true, set price to 0
+    if (isFreeCheckbox?.checked) {
+      formData.set("price", "0");
+    }
+
+    const submitBtn = (form as HTMLFormElement).querySelector(
+      'button[type="submit"]',
+    ) as HTMLButtonElement;
+
+    const originalText = submitBtn.innerHTML;
+    submitBtn.innerHTML = "<span>Actualizando...</span>";
+    submitBtn.disabled = true;
+
+    try {
+      const response = await fetch("/api/events/update", {
+        method: "POST",
+        body: formData, // Send FormData directly, no Content-Type header needed
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        showSuccess("¡Evento actualizado exitosamente! Redirigiendo...");
+      } else {
+        showGeneralError(result.error || "Error al actualizar el evento");
+        submitBtn.innerHTML = originalText;
+        submitBtn.disabled = false;
+      }
+    } catch (error) {
+      console.error("Error:", error);
+      showGeneralError("Error de conexión. Por favor intenta nuevamente.");
+      submitBtn.innerHTML = originalText;
+      submitBtn.disabled = false;
+    }
+  }
+
+  setupErrorClear();
+
+  // Handle form submit (publish)
+  form?.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    await submitEvent();
+  });
+</script>

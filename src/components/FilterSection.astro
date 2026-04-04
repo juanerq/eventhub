@@ -1,0 +1,51 @@
+---
+interface Props {
+  label: string;
+}
+
+const { label } = Astro.props;
+---
+
+<div class="filter-section">
+  <label class="filter-section-label">{label}</label>
+  <div class="filter-section-content">
+    <slot />
+  </div>
+</div>
+
+<style>
+  .filter-section {
+    padding: 1.25rem 1.5rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    transition: background 0.2s ease;
+  }
+
+  .filter-section:hover {
+    background: rgba(255, 255, 255, 0.02);
+  }
+
+  .filter-section:first-child {
+    border-radius: 12px 12px 0 0;
+  }
+
+  .filter-section:last-child {
+    border-bottom: none;
+    border-radius: 0 0 12px 12px;
+  }
+
+  .filter-section-label {
+    display: block;
+    font-weight: 600;
+    font-size: 0.9rem;
+    color: var(--text, #f8fafc);
+    margin-bottom: 1rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .filter-section-content {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+</style>

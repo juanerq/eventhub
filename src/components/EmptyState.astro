@@ -1,0 +1,91 @@
+---
+interface Props {
+  icon?: string;
+  title: string;
+  description?: string;
+  actionText?: string;
+  actionHref?: string;
+}
+
+const { icon, title, description, actionText, actionHref } = Astro.props;
+---
+
+<div class="empty-state">
+  {icon && <div class="empty-icon" set:html={icon} />}
+
+  {
+    !icon && (
+      <svg width="64" height="64" viewBox="0 0 24 24" fill="none">
+        <path
+          d="M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V6a2 2 0 012-2z"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+        />
+      </svg>
+    )
+  }
+
+  <h4>{title}</h4>
+
+  {description && <p>{description}</p>}
+
+  {
+    actionText && actionHref && (
+      <a href={actionHref} class="btn-empty-action">
+        {actionText}
+      </a>
+    )
+  }
+</div>
+
+<style>
+  .empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 4rem 2rem;
+    gap: 1rem;
+    text-align: center;
+  }
+
+  .empty-state svg,
+  .empty-icon {
+    color: var(--text-muted, #94a3b8);
+    margin-bottom: 1rem;
+  }
+
+  .empty-state h4 {
+    font-size: 1.5rem;
+    color: var(--text, #f8fafc);
+    margin: 0;
+  }
+
+  .empty-state p {
+    color: var(--text-muted, #94a3b8);
+    font-size: 1.1rem;
+    margin: 0;
+  }
+
+  .btn-empty-action {
+    display: inline-block;
+    margin-top: 1rem;
+    padding: 0.75rem 1.5rem;
+    background: linear-gradient(
+      135deg,
+      var(--violet-600, #9333ea),
+      var(--fuchsia-600, #c026d3)
+    );
+    color: white;
+    text-decoration: none;
+    border-radius: 8px;
+    font-weight: 600;
+    transition: all 0.3s ease;
+  }
+
+  .btn-empty-action:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(147, 51, 234, 0.4);
+  }
+</style>

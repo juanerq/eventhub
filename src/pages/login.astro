@@ -1,0 +1,1351 @@
+---
+import Layout from "../layouts/Layout.astro";
+
+// Cargar planes desde la API
+let plans = [];
+
+try {
+  const url = new URL("/api/plans", Astro.url.origin);
+  const response = await fetch(url.toString());
+
+  if (response.ok) {
+    const data = await response.json();
+    if (data.success && data.plans) {
+      plans = data.plans;
+    }
+  }
+} catch (error) {
+  console.error("Error loading plans:", error);
+}
+
+function formatPrice(price: number): string {
+  if (price === 0) return "$0";
+
+  // Formato colombiano: punto como separador de miles
+  const formatted = new Intl.NumberFormat("es-CO", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(price);
+
+  return `$ ${formatted}`;
+}
+---
+
+<Layout title="Ingresa a EventHub">
+  <div class="auth-container">
+    <div class="auth-card">
+      <div class="auth-header">
+        <h1>EventHub</h1>
+        <p class="tagline">Descubre eventos increíbles cerca de ti</p>
+      </div>
+
+      <div class="tabs">
+        <button class="tab active" data-tab="login">Iniciar Sesión</button>
+        <button class="tab" data-tab="signup">Crear Cuenta</button>
+      </div>
+
+      <!-- Login Form -->
+      <form id="login-form" class="auth-form active">
+        <div class="form-group">
+          <label for="login-email">Correo electrónico</label>
+          <input
+            type="email"
+            id="login-email"
+            name="email"
+            placeholder="tu@email.com"
+            required
+          />
+          <span class="error-message" id="login-email-error"></span>
+        </div>
+
+        <div class="form-group">
+          <label for="login-password">Contraseña</label>
+          <input
+            type="password"
+            id="login-password"
+            name="password"
+            placeholder="••••••••"
+            required
+          />
+          <span class="error-message" id="login-password-error"></span>
+        </div>
+
+        <div class="error-message general" id="login-general-error"></div>
+
+        <button type="submit" class="btn btn-primary">
+          <span>Entrar</span>
+          <svg
+            class="arrow"
+            width="20"
+            height="20"
+            viewBox="0 0 20 20"
+            fill="none"
+          >
+            <path
+              d="M4 10h12m0 0l-4-4m4 4l-4 4"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"></path>
+          </svg>
+        </button>
+      </form>
+
+      <!-- Signup Form -->
+      <form id="signup-form" class="auth-form">
+        <div class="form-group">
+          <label for="signup-name">Nombre completo</label>
+          <input
+            type="text"
+            id="signup-name"
+            name="name"
+            placeholder="Juan Pérez"
+            required
+          />
+          <span class="error-message" id="signup-name-error"></span>
+        </div>
+
+        <div class="form-group">
+          <label for="signup-email">Correo electrónico</label>
+          <input
+            type="email"
+            id="signup-email"
+            name="email"
+            placeholder="tu@email.com"
+            required
+          />
+          <span class="error-message" id="signup-email-error"></span>
+        </div>
+
+        <div class="form-group">
+          <label for="signup-password">Contraseña</label>
+          <input
+            type="password"
+            id="signup-password"
+            name="password"
+            placeholder="Mínimo 6 caracteres"
+            required
+          />
+          <span class="error-message" id="signup-password-error"></span>
+        </div>
+
+        <div class="error-message general" id="signup-general-error"></div>
+
+        <div class="form-group checkbox-group">
+          <label class="checkbox-label">
+            <input type="checkbox" name="is_organizer" id="is-organizer" />
+            <span>Quiero organizar eventos</span>
+          </label>
+        </div>
+
+        <div
+          class="form-group plan-selector"
+          id="plan-selector"
+          style="display: none;"
+        >
+          <label for="subscription-plan">Selecciona tu plan</label>
+          <div class="plan-options" id="plan-options">
+            {
+              plans.length > 0 ? (
+                plans.map((plan, index) => {
+                  const isPro = plan.slug === "pro";
+                  const isUnlimitedEvents = plan.max_active_events === null;
+                  const isUnlimitedCapacity =
+                    plan.max_capacity_per_event === null;
+                  const isUnlimitedImages = plan.max_images_per_event > 1;
+                  const priceFormatted = formatPrice(plan.price);
+
+                  return (
+                    <label class="plan-option">
+                      <input
+                        type="radio"
+                        name="subscription_plan"
+                        value={plan.slug}
+                        checked={index === 0}
+                      />
+                      <div class={`plan-card ${isPro ? "plan-card-pro" : ""}`}>
+                        <div class="plan-header">
+                          <h3>{plan.name}</h3>
+                          <div class="plan-price">
+                            {priceFormatted}
+                            {plan.price > 0 && <small>/mes</small>}
+                          </div>
+                          <div class="plan-currency">
+                            Pesos colombianos (COP)
+                          </div>
+                        </div>
+                        <ul class="plan-features">
+                          <li>
+                            {isUnlimitedEvents
+                              ? "Eventos ilimitados"
+                              : `Máximo ${plan.max_active_events} eventos activos por mes`}
+                          </li>
+                          <li>
+                            {isUnlimitedImages
+                              ? "Múltiples imágenes"
+                              : `${plan.max_images_per_event} imagen por evento`}
+                          </li>
+                          <li>
+                            {isUnlimitedCapacity
+                              ? "Capacidad ilimitada"
+                              : `Hasta ${plan.max_capacity_per_event} personas por evento`}
+                          </li>
+                          <li
+                            class={!plan.can_feature_events ? "disabled" : ""}
+                          >
+                            Eventos destacados
+                          </li>
+                        </ul>
+                      </div>
+                    </label>
+                  );
+                })
+              ) : (
+                <div class="loading-plans">No hay planes disponibles</div>
+              )
+            }
+          </div>
+        </div>
+
+        <button type="submit" class="btn btn-primary">
+          <span>Crear cuenta</span>
+          <svg
+            class="arrow"
+            width="20"
+            height="20"
+            viewBox="0 0 20 20"
+            fill="none"
+          >
+            <path
+              d="M4 10h12m0 0l-4-4m4 4l-4 4"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"></path>
+          </svg>
+        </button>
+
+        <p class="terms">
+          Al registrarte, aceptas nuestros
+          <a href="#">Términos</a> y <a href="#">Política de Privacidad</a>
+        </p>
+      </form>
+
+      <div class="success-message" id="success-message"></div>
+    </div>
+
+    <div class="decorative-bg">
+      <div class="blob blob-1"></div>
+      <div class="blob blob-2"></div>
+      <div class="blob blob-3"></div>
+    </div>
+  </div>
+</Layout>
+
+<style>
+  :root {
+    /* Violet - Primary brand */
+    --violet-50: #faf5ff;
+    --violet-100: #f3e8ff;
+    --violet-200: #e9d5ff;
+    --violet-300: #d8b4fe;
+    --violet-400: #c084fc;
+    --violet-500: #a855f7;
+    --violet-600: #9333ea;
+    --violet-700: #7e22ce;
+    --violet-800: #6b21a8;
+    --violet-900: #581c87;
+    --violet-950: #3b0764;
+
+    /* Fuchsia/Magenta - Energetic accent */
+    --fuchsia-50: #fdf4ff;
+    --fuchsia-100: #fae8ff;
+    --fuchsia-200: #f5d0fe;
+    --fuchsia-300: #f0abfc;
+    --fuchsia-400: #e879f9;
+    --fuchsia-500: #d946ef;
+    --fuchsia-600: #c026d3;
+    --fuchsia-700: #a21caf;
+    --fuchsia-800: #86198f;
+    --fuchsia-900: #701a75;
+
+    /* Orange/Coral - Warm energy */
+    --orange-50: #fff7ed;
+    --orange-100: #ffedd5;
+    --orange-200: #fed7aa;
+    --orange-300: #fdba74;
+    --orange-400: #fb923c;
+    --orange-500: #f97316;
+    --orange-600: #ea580c;
+    --orange-700: #c2410c;
+    --orange-800: #9a3412;
+    --orange-900: #7c2d12;
+
+    /* Cyan - Cool highlight */
+    --cyan-50: #ecfeff;
+    --cyan-100: #cffafe;
+    --cyan-200: #a5f3fc;
+    --cyan-300: #67e8f9;
+    --cyan-400: #22d3ee;
+    --cyan-500: #06b6d4;
+    --cyan-600: #0891b2;
+    --cyan-700: #0e7490;
+    --cyan-800: #155e75;
+    --cyan-900: #164e63;
+
+    /* Deep Blue/Navy - Professional dark */
+    --navy-50: #f0f9ff;
+    --navy-100: #e0f2fe;
+    --navy-200: #bae6fd;
+    --navy-300: #7dd3fc;
+    --navy-400: #38bdf8;
+    --navy-500: #0ea5e9;
+    --navy-600: #0284c7;
+    --navy-700: #0369a1;
+    --navy-800: #075985;
+    --navy-900: #0c4a6e;
+    --navy-950: #082f49;
+
+    /* Extended neutrals */
+    --slate-50: #f8fafc;
+    --slate-100: #f1f5f9;
+    --slate-200: #e2e8f0;
+    --slate-300: #cbd5e1;
+    --slate-400: #94a3b8;
+    --slate-500: #64748b;
+    --slate-600: #475569;
+    --slate-700: #334155;
+    --slate-800: #1e293b;
+    --slate-900: #0f172a;
+    --slate-950: #020617;
+
+    /* Semantic tokens */
+    --primary: var(--violet-600);
+    --primary-hover: var(--violet-700);
+    --accent: var(--fuchsia-500);
+    --accent-hover: var(--fuchsia-600);
+    --warm-accent: var(--orange-500);
+    --cool-accent: var(--cyan-400);
+    --background: var(--slate-950);
+    --background-light: var(--slate-900);
+    --text: var(--slate-50);
+    --text-muted: var(--slate-400);
+    --border: rgba(255, 255, 255, 0.08);
+  }
+
+  .auth-container {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+    background: linear-gradient(135deg, #020617 0%, #0c4a6e 50%, #1e293b 100%);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .decorative-bg {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    overflow: hidden;
+  }
+
+  .blob {
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(80px);
+    opacity: 0.3;
+    animation: float 20s infinite ease-in-out;
+  }
+
+  .blob-1 {
+    width: 500px;
+    height: 500px;
+    background: linear-gradient(45deg, var(--violet-600), var(--fuchsia-600));
+    top: -250px;
+    left: -250px;
+    animation-delay: 0s;
+  }
+
+  .blob-2 {
+    width: 400px;
+    height: 400px;
+    background: linear-gradient(45deg, var(--orange-500), var(--fuchsia-500));
+    bottom: -200px;
+    right: -200px;
+    animation-delay: -7s;
+  }
+
+  .blob-3 {
+    width: 350px;
+    height: 350px;
+    background: linear-gradient(45deg, var(--cyan-500), var(--violet-600));
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    animation-delay: -14s;
+  }
+
+  @keyframes float {
+    0%,
+    100% {
+      transform: translate(0, 0) scale(1);
+    }
+    33% {
+      transform: translate(30px, -50px) scale(1.1);
+    }
+    66% {
+      transform: translate(-20px, 30px) scale(0.9);
+    }
+  }
+
+  .auth-card {
+    background: rgba(15, 23, 42, 0.85);
+    backdrop-filter: blur(20px);
+    border: 1px solid var(--border);
+    border-radius: 24px;
+    padding: 3rem;
+    width: 100%;
+    max-width: 580px;
+    position: relative;
+    z-index: 1;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    animation: slideUp 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  @keyframes slideUp {
+    from {
+      opacity: 0;
+      transform: translateY(30px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .auth-header {
+    text-align: center;
+    margin-bottom: 2.5rem;
+  }
+
+  .auth-header h1 {
+    font-size: 2.5rem;
+    font-weight: 800;
+    background: linear-gradient(
+      135deg,
+      var(--violet-400) 0%,
+      var(--fuchsia-500) 50%,
+      var(--orange-400) 100%
+    );
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: 0.5rem;
+    letter-spacing: -0.02em;
+  }
+
+  .tagline {
+    color: var(--text-muted);
+    font-size: 0.95rem;
+    font-weight: 400;
+  }
+
+  .tabs {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 2rem;
+    background: rgba(0, 0, 0, 0.2);
+    padding: 0.25rem;
+    border-radius: 12px;
+  }
+
+  .tab {
+    flex: 1;
+    padding: 0.75rem 1rem;
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    font-weight: 600;
+    font-size: 0.9rem;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .tab.active {
+    background: linear-gradient(
+      135deg,
+      var(--violet-600) 0%,
+      var(--fuchsia-600) 100%
+    );
+    color: white;
+    box-shadow: 0 4px 12px rgba(147, 51, 234, 0.5);
+  }
+
+  .tab:hover:not(.active) {
+    color: var(--text);
+    background: rgba(255, 255, 255, 0.05);
+  }
+
+  .auth-form {
+    display: none;
+    animation: fadeIn 0.4s ease;
+  }
+
+  .auth-form.active {
+    display: block;
+  }
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .form-group {
+    margin-bottom: 1.5rem;
+  }
+
+  label {
+    display: block;
+    margin-bottom: 0.5rem;
+    color: var(--text);
+    font-weight: 500;
+    font-size: 0.9rem;
+  }
+
+  input[type="text"],
+  input[type="email"],
+  input[type="password"] {
+    width: 100%;
+    padding: 0.875rem 1rem;
+    background: rgba(0, 0, 0, 0.3);
+    border: 1.5px solid var(--border);
+    border-radius: 12px;
+    color: var(--text);
+    font-size: 1rem;
+    transition: all 0.3s ease;
+  }
+
+  input[type="text"]:focus,
+  input[type="email"]:focus,
+  input[type="password"]:focus {
+    outline: none;
+    border-color: var(--violet-500);
+    background: rgba(0, 0, 0, 0.4);
+    box-shadow: 0 0 0 3px rgba(168, 85, 247, 0.2);
+  }
+
+  input.error {
+    border-color: #ef4444;
+    background: rgba(239, 68, 68, 0.1);
+  }
+
+  input.error:focus {
+    border-color: #ef4444;
+    box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1);
+  }
+
+  input::placeholder {
+    color: var(--text-muted);
+  }
+
+  .checkbox-group {
+    margin: 1.5rem 0;
+  }
+
+  .checkbox-label {
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+    font-weight: 400;
+    gap: 0.75rem;
+  }
+
+  input[type="checkbox"] {
+    width: 20px;
+    height: 20px;
+    cursor: pointer;
+    accent-color: var(--violet-600);
+  }
+
+  .plan-selector {
+    margin: 1.5rem 0;
+    animation: slideDown 0.3s ease;
+  }
+
+  .plan-selector > label {
+    font-size: 1rem;
+    font-weight: 600;
+    margin-bottom: 1rem;
+  }
+
+  @keyframes slideDown {
+    from {
+      opacity: 0;
+      transform: translateY(-10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .plan-options {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    margin-top: 1rem;
+    align-items: stretch;
+  }
+
+  .plan-option {
+    cursor: pointer;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+  }
+
+  .plan-option input[type="radio"] {
+    position: absolute;
+    opacity: 0;
+    width: 1px;
+    height: 1px;
+    pointer-events: none;
+    visibility: hidden;
+  }
+
+  .plan-card {
+    background: linear-gradient(
+      145deg,
+      rgba(15, 23, 42, 0.7),
+      rgba(30, 41, 59, 0.6)
+    );
+    border: 2px solid rgba(255, 255, 255, 0.08);
+    border-radius: 18px;
+    padding: 2rem 1.75rem;
+    transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    flex: 1;
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.25);
+    backdrop-filter: blur(12px);
+  }
+
+  .plan-card::before {
+    content: "";
+    position: absolute;
+    inset: -2px;
+    border-radius: 18px;
+    padding: 2px;
+    background: transparent;
+    -webkit-mask:
+      linear-gradient(#fff 0 0) content-box,
+      linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    opacity: 0;
+    transition: opacity 0.35s ease;
+    pointer-events: none;
+  }
+
+  .plan-option input[type="radio"]:checked + .plan-card {
+    border-color: var(--violet-400);
+    background: linear-gradient(
+      145deg,
+      rgba(168, 85, 247, 0.15),
+      rgba(30, 41, 59, 0.8)
+    );
+    box-shadow:
+      0 8px 40px rgba(147, 51, 234, 0.4),
+      inset 0 1px 0 rgba(255, 255, 255, 0.15);
+    transform: translateY(-3px) scale(1.01);
+  }
+
+  .plan-option input[type="radio"]:checked + .plan-card::before {
+    background: linear-gradient(
+      135deg,
+      var(--violet-500),
+      var(--fuchsia-500),
+      var(--orange-500)
+    );
+    opacity: 1;
+  }
+
+  .plan-card:hover {
+    border-color: rgba(168, 85, 247, 0.5);
+    transform: translateY(-4px);
+    box-shadow: 0 12px 48px rgba(147, 51, 234, 0.3);
+  }
+
+  .plan-card-pro {
+    border-color: rgba(217, 70, 239, 0.3);
+    background: linear-gradient(
+      145deg,
+      rgba(217, 70, 239, 0.1),
+      rgba(249, 115, 22, 0.05),
+      rgba(30, 41, 59, 0.8)
+    );
+  }
+
+  .plan-header {
+    margin-bottom: 1.25rem;
+    padding-top: 0;
+    text-align: center;
+    flex-shrink: 0;
+  }
+
+  .plan-header h3 {
+    font-size: 1.4rem;
+    font-weight: 800;
+    background: linear-gradient(135deg, var(--violet-300), var(--fuchsia-400));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: 0.75rem;
+    letter-spacing: -0.025em;
+    word-wrap: break-word;
+  }
+
+  .plan-price {
+    font-size: 2rem;
+    font-weight: 900;
+    background: linear-gradient(
+      135deg,
+      var(--cyan-300) 0%,
+      var(--violet-400) 50%,
+      var(--fuchsia-400) 100%
+    );
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    display: block;
+    line-height: 1.15;
+    letter-spacing: -0.035em;
+    margin-bottom: 0.2rem;
+  }
+
+  .plan-price small {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--violet-400);
+    display: block;
+    margin-top: 0.2rem;
+    letter-spacing: 0;
+  }
+
+  .plan-currency {
+    font-size: 0.75rem;
+    color: var(--orange-400);
+    font-weight: 600;
+    margin-top: 0.5rem;
+    opacity: 0.9;
+  }
+
+  .plan-features {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    gap: 0.7rem;
+  }
+
+  .plan-features li {
+    color: #f0f0f0;
+    font-size: 0.88rem;
+    padding: 0;
+    display: flex;
+    align-items: flex-start;
+    gap: 0.65rem;
+    line-height: 1.4;
+    font-weight: 500;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+  }
+
+  .plan-features li::before {
+    content: "✓";
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    background: linear-gradient(135deg, var(--cyan-400), var(--violet-500));
+    border-radius: 50%;
+    font-size: 0.7rem;
+    font-weight: 900;
+    flex-shrink: 0;
+    margin-top: 1px;
+    box-shadow: 0 2px 8px rgba(34, 211, 238, 0.4);
+  }
+
+  .plan-features li.disabled {
+    color: var(--text-muted);
+    opacity: 0.38;
+  }
+
+  .plan-features li.disabled::before {
+    content: "✗";
+    background: linear-gradient(
+      135deg,
+      rgba(255, 255, 255, 0.1),
+      rgba(255, 255, 255, 0.05)
+    );
+    box-shadow: none;
+  }
+
+  .loading-plans {
+    grid-column: 1 / -1;
+    text-align: center;
+    padding: 2rem;
+    color: var(--text-muted);
+    font-size: 0.9rem;
+  }
+
+  .btn {
+    width: 100%;
+    padding: 1rem 1.5rem;
+    border: none;
+    border-radius: 12px;
+    font-weight: 600;
+    font-size: 1rem;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+  }
+
+  .btn-primary {
+    background: linear-gradient(
+      135deg,
+      var(--violet-600) 0%,
+      var(--fuchsia-600) 100%
+    );
+    color: white;
+    box-shadow: 0 4px 20px rgba(147, 51, 234, 0.5);
+  }
+
+  .btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 30px rgba(192, 38, 211, 0.6);
+  }
+
+  .btn-primary:active {
+    transform: translateY(0);
+  }
+
+  .arrow {
+    transition: transform 0.3s ease;
+  }
+
+  .btn:hover .arrow {
+    transform: translateX(4px);
+  }
+
+  .terms {
+    margin-top: 1.5rem;
+    text-align: center;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    line-height: 1.6;
+  }
+
+  .terms a {
+    color: var(--violet-400);
+    text-decoration: none;
+  }
+
+  .terms a:hover {
+    text-decoration: underline;
+  }
+
+  .error-message {
+    display: block;
+    color: #ef4444;
+    font-size: 0.875rem;
+    margin-top: 0.5rem;
+    min-height: 1.25rem;
+    animation: shake 0.3s ease;
+  }
+
+  .error-message.general {
+    margin: 1rem 0;
+    padding: 0.75rem 1rem;
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    border-radius: 8px;
+    text-align: center;
+  }
+
+  .error-message:empty,
+  .error-message.general:empty {
+    display: none;
+  }
+
+  .success-message {
+    margin-top: 1.5rem;
+    padding: 1rem 1.25rem;
+    background: linear-gradient(
+      135deg,
+      rgba(168, 85, 247, 0.1),
+      rgba(217, 70, 239, 0.1)
+    );
+    border: 1px solid rgba(168, 85, 247, 0.3);
+    border-radius: 12px;
+    color: var(--violet-300);
+    text-align: center;
+    font-size: 0.95rem;
+    animation: slideDown 0.4s ease;
+  }
+
+  .success-message:empty {
+    display: none;
+  }
+
+  @keyframes shake {
+    0%,
+    100% {
+      transform: translateX(0);
+    }
+    25% {
+      transform: translateX(-5px);
+    }
+    75% {
+      transform: translateX(5px);
+    }
+  }
+
+  @keyframes slideDown {
+    from {
+      opacity: 0;
+      transform: translateY(-10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @media (max-width: 640px) {
+    .auth-card {
+      padding: 2rem 1.5rem;
+    }
+
+    .auth-header h1 {
+      font-size: 2rem;
+    }
+
+    .plan-options {
+      grid-template-columns: 1fr;
+      gap: 1rem;
+    }
+
+    .plan-card {
+      padding: 1.75rem 1.25rem;
+      min-height: auto;
+    }
+
+    .plan-badge {
+      top: -10px;
+      right: 1rem;
+      font-size: 0.65rem;
+      padding: 0.35rem 0.85rem;
+    }
+
+    .plan-header h3 {
+      font-size: 1.4rem;
+    }
+
+    .plan-price {
+      font-size: 2rem;
+    }
+
+    .plan-features {
+      gap: 0.75rem;
+    }
+
+    .plan-features li {
+      font-size: 0.9rem;
+    }
+
+    .plan-features li::before {
+      width: 20px;
+      height: 20px;
+      font-size: 0.7rem;
+    }
+  }
+</style>
+
+<script>
+  const tabs = document.querySelectorAll(".tab");
+  const loginForm = document.getElementById("login-form");
+  const signupForm = document.getElementById("signup-form");
+
+  // Clear errors on input
+  function setupErrorClear(form: HTMLFormElement) {
+    const inputs = form.querySelectorAll("input");
+    inputs.forEach((input) => {
+      input.addEventListener("input", () => {
+        input.classList.remove("error");
+        const errorId = input.id + "-error";
+        const errorElement = document.getElementById(errorId);
+        if (errorElement) errorElement.textContent = "";
+      });
+    });
+  }
+
+  function showError(inputId: string, message: string) {
+    const input = document.getElementById(inputId) as HTMLInputElement;
+    const errorElement = document.getElementById(inputId + "-error");
+
+    if (input) {
+      input.classList.add("error");
+      input.focus();
+    }
+    if (errorElement) {
+      errorElement.textContent = message;
+    }
+  }
+
+  function showGeneralError(formId: string, message: string) {
+    const errorElement = document.getElementById(formId + "-general-error");
+    if (errorElement) {
+      errorElement.textContent = message;
+    }
+  }
+
+  function clearAllErrors(formId: string) {
+    const form = document.getElementById(formId) as HTMLFormElement;
+    if (!form) return;
+
+    const inputs = form.querySelectorAll("input");
+    inputs.forEach((input) => input.classList.remove("error"));
+
+    const errorMessages = form.querySelectorAll(".error-message");
+    errorMessages.forEach((msg) => (msg.textContent = ""));
+  }
+
+  if (loginForm) setupErrorClear(loginForm as HTMLFormElement);
+  if (signupForm) setupErrorClear(signupForm as HTMLFormElement);
+
+  // Toggle plan selector based on organizer checkbox
+  const isOrganizerCheckbox = document.getElementById(
+    "is-organizer",
+  ) as HTMLInputElement;
+  const planSelector = document.getElementById("plan-selector");
+
+  isOrganizerCheckbox?.addEventListener("change", () => {
+    if (planSelector) {
+      if (isOrganizerCheckbox.checked) {
+        planSelector.style.display = "block";
+      } else {
+        planSelector.style.display = "none";
+      }
+    }
+  });
+
+  tabs.forEach((tab) => {
+    tab.addEventListener("click", () => {
+      const tabName = tab.getAttribute("data-tab");
+
+      // Update active tab
+      tabs.forEach((t) => t.classList.remove("active"));
+      tab.classList.add("active");
+
+      // Clear all errors when switching tabs
+      clearAllErrors("login-form");
+      clearAllErrors("signup-form");
+
+      // Toggle forms
+      if (tabName === "login") {
+        loginForm?.classList.add("active");
+        signupForm?.classList.remove("active");
+      } else {
+        signupForm?.classList.add("active");
+        loginForm?.classList.remove("active");
+      }
+    });
+  });
+
+  // Handle login
+  loginForm?.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    clearAllErrors("login-form");
+
+    const formData = new FormData(e.target as HTMLFormElement);
+    const email = formData.get("email") as string;
+    const password = formData.get("password") as string;
+
+    const submitBtn = (e.target as HTMLFormElement).querySelector(
+      'button[type="submit"]',
+    ) as HTMLButtonElement;
+    const originalText = submitBtn.innerHTML;
+    submitBtn.innerHTML = "<span>Iniciando sesión...</span>";
+    submitBtn.disabled = true;
+
+    try {
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        window.location.href = "/dashboard";
+      } else {
+        // Show error on inputs
+        const errorMsg = data.error || "Credenciales inválidas";
+
+        if (
+          errorMsg.toLowerCase().includes("email") ||
+          errorMsg.toLowerCase().includes("correo")
+        ) {
+          showError("login-email", errorMsg);
+        } else if (
+          errorMsg.toLowerCase().includes("password") ||
+          errorMsg.toLowerCase().includes("contraseña")
+        ) {
+          showError("login-password", errorMsg);
+        } else {
+          // If not specific, mark both as error
+          showError("login-email", "");
+          showError("login-password", "");
+          showGeneralError("login-form", errorMsg);
+        }
+
+        submitBtn.innerHTML = originalText;
+        submitBtn.disabled = false;
+      }
+    } catch (error) {
+      console.error("Error:", error);
+      showGeneralError(
+        "login-form",
+        "Error de conexión. Por favor intenta nuevamente.",
+      );
+      submitBtn.innerHTML = originalText;
+      submitBtn.disabled = false;
+    }
+  });
+
+  // Handle signup
+  signupForm?.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    clearAllErrors("signup-form");
+
+    const formData = new FormData(e.target as HTMLFormElement);
+    const name = formData.get("name") as string;
+    const email = formData.get("email") as string;
+    const password = formData.get("password") as string;
+    const isOrganizer = formData.get("is_organizer") === "on";
+    const subscriptionPlan = isOrganizer
+      ? (formData.get("subscription_plan") as string) || "free"
+      : "free";
+
+    // Basic validation
+    if (!name || name.length < 3) {
+      showError("signup-name", "El nombre debe tener al menos 3 caracteres");
+      return;
+    }
+
+    if (!email || !email.includes("@")) {
+      showError("signup-email", "Ingresa un correo electrónico válido");
+      return;
+    }
+
+    if (!password || password.length < 6) {
+      showError(
+        "signup-password",
+        "La contraseña debe tener al menos 6 caracteres",
+      );
+      return;
+    }
+
+    const submitBtn = (e.target as HTMLFormElement).querySelector(
+      'button[type="submit"]',
+    ) as HTMLButtonElement;
+    const originalText = submitBtn.innerHTML;
+
+    // If PRO plan selected, redirect to checkout
+    if (subscriptionPlan === "pro") {
+      console.log(
+        "PRO plan selected, storing data and redirecting to checkout",
+      );
+      console.log("Data to store:", {
+        name,
+        email,
+        isOrganizer,
+        subscriptionPlan,
+      });
+
+      // Store signup data in sessionStorage for later
+      const dataToStore = {
+        name,
+        email,
+        password,
+        isOrganizer,
+        subscriptionPlan,
+      };
+
+      sessionStorage.setItem("signupData", JSON.stringify(dataToStore));
+
+      // Verify it was stored
+      const stored = sessionStorage.getItem("signupData");
+      console.log("Data stored in sessionStorage:", stored);
+
+      // Redirect to checkout
+      window.location.href = `/checkout?plan=${subscriptionPlan}`;
+      return;
+    }
+
+    // For free plan, proceed with signup
+    submitBtn.innerHTML = "<span>Creando cuenta...</span>";
+    submitBtn.disabled = true;
+
+    try {
+      const response = await fetch("/api/auth/signup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name,
+          email,
+          password,
+          isOrganizer,
+          subscriptionPlan,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        // Clear signup data from sessionStorage
+        sessionStorage.removeItem("signupData");
+
+        // Show success message
+        const successMsg = document.getElementById("success-message");
+        if (successMsg) {
+          successMsg.textContent =
+            "¡Cuenta creada exitosamente! Puedes iniciar sesión ahora.";
+        }
+
+        // Switch to login tab after delay
+        setTimeout(() => {
+          (tabs[0] as HTMLButtonElement).click();
+          if (successMsg) successMsg.textContent = "";
+        }, 3000);
+
+        (e.target as HTMLFormElement).reset();
+      } else {
+        const errorMsg = data.error || "Error al crear cuenta";
+
+        // Check if it's a duplicate email error
+        if (data.errorType === "duplicate_email" || response.status === 409) {
+          showError(
+            "signup-email",
+            "Este correo ya está registrado. Intenta iniciar sesión.",
+          );
+        } else if (
+          errorMsg.toLowerCase().includes("email") ||
+          errorMsg.toLowerCase().includes("correo") ||
+          errorMsg.toLowerCase().includes("registrado")
+        ) {
+          showError("signup-email", errorMsg);
+        } else if (
+          errorMsg.toLowerCase().includes("password") ||
+          errorMsg.toLowerCase().includes("contraseña")
+        ) {
+          showError("signup-password", errorMsg);
+        } else {
+          showGeneralError("signup-form", errorMsg);
+        }
+      }
+
+      submitBtn.innerHTML = originalText;
+      submitBtn.disabled = false;
+    } catch (error) {
+      console.error("Error:", error);
+      showGeneralError(
+        "signup-form",
+        "Error de conexión. Por favor intenta nuevamente.",
+      );
+      submitBtn.innerHTML = originalText;
+      submitBtn.disabled = false;
+    }
+  });
+
+  // Restore form data from sessionStorage on page load
+  window.addEventListener("DOMContentLoaded", () => {
+    const signupDataStr = sessionStorage.getItem("signupData");
+
+    if (signupDataStr) {
+      try {
+        const signupData = JSON.parse(signupDataStr);
+
+        // Switch to signup tab
+        const signupTab = Array.from(tabs).find(
+          (tab) => tab.getAttribute("data-tab") === "signup",
+        );
+        if (signupTab) {
+          (signupTab as HTMLButtonElement).click();
+        }
+
+        // Fill form fields
+        const nameInput = document.getElementById(
+          "signup-name",
+        ) as HTMLInputElement;
+        const emailInput = document.getElementById(
+          "signup-email",
+        ) as HTMLInputElement;
+        const passwordInput = document.getElementById(
+          "signup-password",
+        ) as HTMLInputElement;
+        const organizerCheckbox = document.getElementById(
+          "is-organizer",
+        ) as HTMLInputElement;
+
+        if (nameInput) nameInput.value = signupData.name || "";
+        if (emailInput) emailInput.value = signupData.email || "";
+        if (passwordInput) passwordInput.value = signupData.password || "";
+
+        // Check organizer checkbox if was checked
+        if (organizerCheckbox && signupData.isOrganizer) {
+          organizerCheckbox.checked = true;
+
+          // Show plan selector
+          if (planSelector) {
+            planSelector.style.display = "block";
+          }
+
+          // Select the saved plan
+          if (signupData.subscriptionPlan) {
+            const planRadio = document.querySelector(
+              `input[name="subscription_plan"][value="${signupData.subscriptionPlan}"]`,
+            ) as HTMLInputElement;
+
+            if (planRadio) {
+              planRadio.checked = true;
+            }
+          }
+        }
+      } catch (error) {
+        console.error("Error restoring signup data:", error);
+        sessionStorage.removeItem("signupData");
+      }
+    }
+  });
+</script>

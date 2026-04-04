@@ -1,0 +1,550 @@
+---
+import Layout from "../layouts/Layout.astro";
+import Navbar from "../components/Navbar.astro";
+import EventCard from "../components/EventCard.astro";
+import { getUser } from "../lib/auth";
+import { supabaseAdmin } from "../lib/supabase";
+
+const user = await getUser(Astro.cookies);
+
+if (!user) {
+  return Astro.redirect("/login");
+}
+
+const isOrganizer = user.user_metadata?.is_organizer || false;
+
+if (!isOrganizer) {
+  return Astro.redirect("/dashboard");
+}
+
+// Cargar eventos del usuario
+let myEvents: any[] = [];
+let loading = false;
+let error = null;
+
+try {
+  const { data: events, error: fetchError } = await supabaseAdmin
+    .from("events")
+    .select("*")
+    .eq("organizer_id", user.id)
+    .order("created_at", { ascending: false });
+
+  if (fetchError) {
+    console.error("Error fetching events:", fetchError);
+    error = fetchError;
+  } else if (events) {
+    // For each event, fetch its primary image from event_images
+    const eventsWithImages = await Promise.all(
+      events.map(async (event) => {
+        const { data: image } = await supabaseAdmin
+          .from("event_images")
+          .select("image_url")
+          .eq("event_id", event.id)
+          .eq("is_primary", true)
+          .single();
+
+        return {
+          ...event,
+          image_url: image?.image_url || null,
+        };
+      }),
+    );
+    myEvents = eventsWithImages;
+  }
+} catch (err) {
+  console.error("Error loading events:", err);
+  error = err;
+}
+---
+
+<Layout title="Mis Eventos">
+  <div class="dashboard">
+    <Navbar
+      activePage="mis-eventos"
+      isOrganizer={isOrganizer}
+      isAuthenticated={true}
+    />
+
+    <main class="main-content">
+      <div class="container">
+        <div class="my-events-section">
+          <div class="section-header">
+            <h3>Mis Eventos</h3>
+            <a href="/create-event" class="btn-create-event">
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <line x1="12" y1="5" x2="12" y2="19"></line>
+                <line x1="5" y1="12" x2="19" y2="12"></line>
+              </svg>
+              <span>Crear Evento</span>
+            </a>
+          </div>
+
+          {
+            myEvents.length > 0 ? (
+              <div class="events-grid">
+                {myEvents.map((event, index) => (
+                  <EventCard event={event} variant="my-events" index={index} />
+                ))}
+              </div>
+            ) : (
+              <div class="empty-state">
+                <svg width="64" height="64" viewBox="0 0 24 24" fill="none">
+                  <path
+                    d="M19 3H5a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2V5a2 2 0 00-2-2zM9 11h6M12 8v6"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                  />
+                </svg>
+                <h4>No tienes eventos creados</h4>
+                <p>Comienza creando tu primer evento</p>
+                <a href="/create-event" class="btn-empty-action">
+                  Crear Evento
+                </a>
+              </div>
+            )
+          }
+        </div>
+      </div>
+    </main>
+  </div>
+</Layout>
+
+<style>
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+
+  :root {
+    --violet-50: #faf5ff;
+    --violet-100: #f3e8ff;
+    --violet-200: #e9d5ff;
+    --violet-300: #d8b4fe;
+    --violet-400: #c084fc;
+    --violet-500: #a855f7;
+    --violet-600: #9333ea;
+    --violet-700: #7e22ce;
+    --violet-800: #6b21a8;
+    --violet-900: #581c87;
+    --violet-950: #3b0764;
+
+    --fuchsia-50: #fdf4ff;
+    --fuchsia-100: #fae8ff;
+    --fuchsia-200: #f5d0fe;
+    --fuchsia-300: #f0abfc;
+    --fuchsia-400: #e879f9;
+    --fuchsia-500: #d946ef;
+    --fuchsia-600: #c026d3;
+    --fuchsia-700: #a21caf;
+    --fuchsia-800: #86198f;
+    --fuchsia-900: #701a75;
+
+    --orange-50: #fff7ed;
+    --orange-100: #ffedd5;
+    --orange-200: #fed7aa;
+    --orange-300: #fdba74;
+    --orange-400: #fb923c;
+    --orange-500: #f97316;
+    --orange-600: #ea580c;
+    --orange-700: #c2410c;
+    --orange-800: #9a3412;
+    --orange-900: #7c2d12;
+
+    --cyan-50: #ecfeff;
+    --cyan-100: #cffafe;
+    --cyan-200: #a5f3fc;
+    --cyan-300: #67e8f9;
+    --cyan-400: #22d3ee;
+    --cyan-500: #06b6d4;
+    --cyan-600: #0891b2;
+    --cyan-700: #0e7490;
+    --cyan-800: #155e75;
+    --cyan-900: #164e63;
+
+    --emerald-50: #ecfdf5;
+    --emerald-100: #d1fae5;
+    --emerald-200: #a7f3d0;
+    --emerald-300: #6ee7b7;
+    --emerald-400: #34d399;
+    --emerald-500: #10b981;
+    --emerald-600: #059669;
+    --emerald-700: #047857;
+    --emerald-800: #065f46;
+    --emerald-900: #064e3b;
+
+    --navy-50: #f0f9ff;
+    --navy-100: #e0f2fe;
+    --navy-200: #bae6fd;
+    --navy-300: #7dd3fc;
+    --navy-400: #38bdf8;
+    --navy-500: #0ea5e9;
+    --navy-600: #0284c7;
+    --navy-700: #0369a1;
+    --navy-800: #075985;
+    --navy-900: #0c4a6e;
+    --navy-950: #082f49;
+
+    --slate-50: #f8fafc;
+    --slate-100: #f1f5f9;
+    --slate-200: #e2e8f0;
+    --slate-300: #cbd5e1;
+    --slate-400: #94a3b8;
+    --slate-500: #64748b;
+    --slate-600: #475569;
+    --slate-700: #334155;
+    --slate-800: #1e293b;
+    --slate-900: #0f172a;
+    --slate-950: #020617;
+
+    --primary: var(--violet-600);
+    --primary-hover: var(--violet-700);
+    --primary-dark: var(--violet-700);
+    --secondary: var(--fuchsia-500);
+    --accent: var(--fuchsia-500);
+    --accent-hover: var(--fuchsia-600);
+    --warm-accent: var(--orange-500);
+    --cool-accent: var(--cyan-400);
+    --dark: var(--slate-950);
+    --dark-light: var(--slate-900);
+    --background: var(--slate-950);
+    --background-light: var(--slate-900);
+    --text: var(--slate-50);
+    --text-muted: var(--slate-400);
+    --success: var(--emerald-500);
+    --border: rgba(255, 255, 255, 0.08);
+  }
+
+  .dashboard {
+    min-height: 100vh;
+    background: linear-gradient(
+      135deg,
+      var(--slate-950) 0%,
+      var(--navy-900) 50%,
+      var(--slate-800) 100%
+    );
+  }
+
+  .main-content {
+    padding: 3rem 0;
+  }
+
+  .container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 2rem;
+  }
+
+  .my-events-section {
+    animation: fadeInUp 0.6s ease 0.1s backwards;
+  }
+
+  .section-header {
+    margin-bottom: 2rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 1rem;
+  }
+
+  .section-header h3 {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--text);
+    margin-bottom: 0;
+  }
+
+  .btn-create-event {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1.5rem;
+    background: linear-gradient(135deg, var(--violet-600), var(--fuchsia-600));
+    border: none;
+    border-radius: 10px;
+    color: white;
+    font-weight: 600;
+    cursor: pointer;
+    text-decoration: none;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 12px rgba(147, 51, 234, 0.3);
+  }
+
+  .btn-create-event:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(147, 51, 234, 0.4);
+  }
+
+  .btn-create-event svg {
+    flex-shrink: 0;
+  }
+
+  .empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 4rem 2rem;
+    gap: 1rem;
+    text-align: center;
+  }
+
+  .empty-state svg {
+    color: var(--text-muted);
+    margin-bottom: 1rem;
+  }
+
+  .empty-state h4 {
+    font-size: 1.5rem;
+    color: var(--text);
+    margin: 0;
+  }
+
+  .empty-state p {
+    color: var(--text-muted);
+    font-size: 1.1rem;
+  }
+
+  .btn-empty-action {
+    display: inline-block;
+    margin-top: 1rem;
+    padding: 0.75rem 1.5rem;
+    background: linear-gradient(135deg, var(--violet-600), var(--fuchsia-600));
+    color: white;
+    text-decoration: none;
+    border-radius: 8px;
+    font-weight: 600;
+    transition: all 0.3s ease;
+  }
+
+  .btn-empty-action:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(147, 51, 234, 0.4);
+  }
+
+  .events-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    gap: 2rem;
+  }
+
+  :global(.event-card) {
+    background: rgba(37, 37, 64, 0.6);
+    backdrop-filter: blur(20px);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    overflow: hidden;
+    transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    animation: fadeInUp 0.6s ease backwards;
+  }
+
+  :global(.event-card:hover) {
+    transform: translateY(-8px);
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+    border-color: rgba(147, 51, 234, 0.3);
+  }
+
+  :global(.event-image-wrapper) {
+    position: relative;
+    width: 100%;
+    height: 220px;
+    overflow: hidden;
+  }
+
+  :global(.event-image) {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform 0.4s ease;
+  }
+
+  :global(.event-card:hover .event-image) {
+    transform: scale(1.1);
+  }
+
+  :global(.event-content) {
+    padding: 1.5rem;
+  }
+
+  :global(.event-category) {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.375rem 0.875rem;
+    background: rgba(147, 51, 234, 0.1);
+    border: 1px solid rgba(147, 51, 234, 0.3);
+    border-radius: 20px;
+    font-size: 0.875rem;
+    color: var(--violet-300);
+    margin-bottom: 1rem;
+  }
+
+  :global(.event-title) {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--text);
+    margin-bottom: 1rem;
+    line-height: 1.4;
+  }
+
+  :global(.event-details) {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    margin-bottom: 1.25rem;
+  }
+
+  :global(.event-detail) {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    color: var(--text-muted);
+    font-size: 0.9rem;
+  }
+
+  :global(.event-detail svg) {
+    width: 18px;
+    height: 18px;
+    flex-shrink: 0;
+    color: var(--violet-400);
+  }
+
+  :global(.event-footer) {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border);
+  }
+
+  :global(.price-tag) {
+    padding: 0.5rem 1rem;
+    background: linear-gradient(135deg, var(--violet-600), var(--fuchsia-600));
+    color: white;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 0.95rem;
+  }
+
+  :global(.price-tag.free) {
+    background: linear-gradient(135deg, var(--emerald-600), var(--cyan-600));
+  }
+
+  :global(.event-actions-buttons) {
+    display: flex;
+    gap: 0.5rem;
+  }
+
+  :global(.btn-edit),
+  :global(.btn-delete) {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  :global(.btn-edit) {
+    background: rgba(34, 211, 238, 0.1);
+    color: var(--cyan-400);
+    text-decoration: none;
+  }
+
+  :global(.btn-edit:hover) {
+    background: rgba(34, 211, 238, 0.2);
+    transform: scale(1.1);
+  }
+
+  :global(.btn-delete) {
+    background: rgba(249, 115, 22, 0.1);
+    color: var(--orange-400);
+  }
+
+  :global(.btn-delete:hover) {
+    background: rgba(249, 115, 22, 0.2);
+    transform: scale(1.1);
+  }
+
+  @keyframes fadeInUp {
+    from {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @media (max-width: 768px) {
+    .container {
+      padding: 0 1rem;
+    }
+
+    .section-header h3 {
+      font-size: 1.5rem;
+    }
+
+    .events-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>
+
+<script>
+  // Event listener para botones de eliminar
+  document.addEventListener("DOMContentLoaded", () => {
+    const deleteButtons = document.querySelectorAll(".btn-delete");
+
+    deleteButtons.forEach((button) => {
+      button.addEventListener("click", async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+
+        const eventId = button.getAttribute("data-event-id");
+
+        if (!eventId) return;
+
+        const confirmed = confirm(
+          "¿Estás seguro de que quieres eliminar este evento?",
+        );
+
+        if (!confirmed) return;
+
+        try {
+          const response = await fetch(`/api/events/${eventId}`, {
+            method: "DELETE",
+          });
+
+          const data = await response.json();
+
+          if (data.success) {
+            // Recargar la página para mostrar la lista actualizada
+            window.location.reload();
+          } else {
+            alert(
+              "Error al eliminar el evento: " +
+                (data.error || "Error desconocido"),
+            );
+          }
+        } catch (error) {
+          console.error("Error:", error);
+          alert("Error al eliminar el evento");
+        }
+      });
+    });
+  });
+</script>

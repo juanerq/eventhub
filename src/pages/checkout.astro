@@ -1,0 +1,1225 @@
+---
+import Layout from "../layouts/Layout.astro";
+import { getUser } from "../lib/auth";
+
+// Verificar si el usuario está autenticado (cambio de plan)
+const user = await getUser(Astro.cookies);
+const isUpgrade = !!user; // True si es usuario autenticado cambiando de plan
+
+// Obtener el plan del query param o usar PRO por defecto
+const planSlug = Astro.url.searchParams.get("plan") || "pro";
+
+// Cargar información del plan
+let selectedPlan: any = null;
+
+try {
+  const url = new URL("/api/plans", Astro.url.origin);
+  const response = await fetch(url.toString());
+
+  if (response.ok) {
+    const data = await response.json();
+    if (data.success && data.plans) {
+      selectedPlan = data.plans.find((p: any) => p.slug === planSlug);
+    }
+  }
+} catch (error) {
+  console.error("Error loading plan:", error);
+}
+
+// Si no se encuentra el plan, usar datos por defecto
+if (!selectedPlan) {
+  selectedPlan = {
+    name: "PRO",
+    price: 20000000,
+    slug: "pro",
+    max_active_events: null,
+    max_images_per_event: 10,
+    max_capacity_per_event: null,
+    can_feature_events: true,
+  };
+}
+
+function formatPrice(price: number): string {
+  if (price === 0) return "$0";
+
+  const formatted = new Intl.NumberFormat("es-CO", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(price);
+
+  return `$ ${formatted}`;
+}
+---
+
+<Layout title="Pago - EventHub">
+  <div class="checkout-container">
+    <div class="checkout-wrapper">
+      <!-- Payment Form -->
+      <div class="payment-section">
+        <div class="section-header">
+          <a href={isUpgrade ? "/profile" : "/login"} class="back-link">
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+              <path
+                d="M12 16l-6-6 6-6"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"></path>
+            </svg>
+            Volver
+          </a>
+          <h1>Información de Pago</h1>
+          <p class="subtitle">
+            {
+              isUpgrade
+                ? `Actualizar a plan ${selectedPlan.name}`
+                : "Completa tu suscripción a EventHub"
+            }
+          </p>
+        </div>
+
+        <form
+          id="payment-form"
+          class="payment-form"
+          data-is-upgrade={isUpgrade}
+          data-plan-slug={planSlug}
+        >
+          <div class="form-group">
+            <label for="card-number">Número de tarjeta</label>
+            <div class="input-wrapper">
+              <input
+                type="text"
+                id="card-number"
+                name="card-number"
+                placeholder="1234 5678 9012 3456"
+                maxlength="19"
+                required
+              />
+              <div class="card-icons">
+                <svg
+                  class="card-icon"
+                  width="32"
+                  height="20"
+                  viewBox="0 0 32 20"
+                  fill="none"
+                >
+                  <rect width="32" height="20" rx="3" fill="#1A1F71"></rect>
+                  <circle cx="11" cy="10" r="5" fill="#EB001B"></circle>
+                  <circle cx="21" cy="10" r="5" fill="#F79E1B"></circle>
+                </svg>
+              </div>
+            </div>
+            <span class="error-message" id="card-number-error"></span>
+          </div>
+
+          <div class="form-group">
+            <label for="card-name">Nombre en la tarjeta</label>
+            <input
+              type="text"
+              id="card-name"
+              name="card-name"
+              placeholder="JUAN PÉREZ"
+              required
+            />
+            <span class="error-message" id="card-name-error"></span>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label for="card-expiry">Fecha de expiración</label>
+              <input
+                type="text"
+                id="card-expiry"
+                name="card-expiry"
+                placeholder="MM/AA"
+                maxlength="5"
+                required
+              />
+              <span class="error-message" id="card-expiry-error"></span>
+            </div>
+
+            <div class="form-group">
+              <label for="card-cvv">CVV</label>
+              <input
+                type="text"
+                id="card-cvv"
+                name="card-cvv"
+                placeholder="123"
+                maxlength="3"
+                required
+              />
+              <span class="error-message" id="card-cvv-error"></span>
+            </div>
+          </div>
+
+          <div class="error-message general" id="payment-general-error"></div>
+
+          <button type="submit" class="btn btn-primary">
+            <span>Confirmar pago de {formatPrice(selectedPlan.price)}</span>
+            <svg
+              class="arrow"
+              width="20"
+              height="20"
+              viewBox="0 0 20 20"
+              fill="none"
+            >
+              <path
+                d="M4 10h12m0 0l-4-4m4 4l-4 4"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"></path>
+            </svg>
+          </button>
+
+          <p class="terms">
+            Al confirmar el pago, aceptas nuestros
+            <a href="#">Términos de Servicio</a> y
+            <a href="#">Política de Reembolso</a>
+          </p>
+        </form>
+      </div>
+
+      <!-- Order Summary -->
+      <div class="summary-section">
+        <div class="summary-card">
+          <h2>Resumen del pedido</h2>
+
+          <div class="plan-summary">
+            <div class="plan-details">
+              <h3>Plan {selectedPlan.name}</h3>
+              <p class="plan-price">
+                {formatPrice(selectedPlan.price)}<span>/mes</span>
+              </p>
+            </div>
+          </div>
+
+          <div class="divider"></div>
+
+          <div class="features-list">
+            <h4>Incluye:</h4>
+            <ul>
+              <li>
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                  <circle cx="8" cy="8" r="8" fill="currentColor" opacity="0.2"
+                  ></circle>
+                  <path
+                    d="M5 8l2 2 4-4"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"></path>
+                </svg>
+                {
+                  selectedPlan.max_active_events === null
+                    ? "Eventos ilimitados"
+                    : `Máximo ${selectedPlan.max_active_events} eventos activos`
+                }
+              </li>
+              <li>
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                  <circle cx="8" cy="8" r="8" fill="currentColor" opacity="0.2"
+                  ></circle>
+                  <path
+                    d="M5 8l2 2 4-4"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"></path>
+                </svg>
+                {
+                  selectedPlan.max_images_per_event > 1
+                    ? "Múltiples imágenes por evento"
+                    : "1 imagen por evento"
+                }
+              </li>
+              <li>
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                  <circle cx="8" cy="8" r="8" fill="currentColor" opacity="0.2"
+                  ></circle>
+                  <path
+                    d="M5 8l2 2 4-4"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"></path>
+                </svg>
+                {
+                  selectedPlan.max_capacity_per_event === null
+                    ? "Capacidad ilimitada"
+                    : `Hasta ${selectedPlan.max_capacity_per_event} personas`
+                }
+              </li>
+              <li class={!selectedPlan.can_feature_events ? "disabled" : ""}>
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                  <circle cx="8" cy="8" r="8" fill="currentColor" opacity="0.2"
+                  ></circle>
+                  <path
+                    d="M5 8l2 2 4-4"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"></path>
+                </svg>
+                Eventos destacados
+              </li>
+            </ul>
+          </div>
+
+          <div class="divider"></div>
+
+          <div class="total-section">
+            <div class="total-row">
+              <span>Subtotal</span>
+              <span>{formatPrice(selectedPlan.price)}</span>
+            </div>
+            <div class="total-row">
+              <span>IVA (19%)</span>
+              <span>{formatPrice(Math.round(selectedPlan.price * 0.19))}</span>
+            </div>
+            <div class="total-row total">
+              <span>Total</span>
+              <span>{formatPrice(Math.round(selectedPlan.price * 1.19))}</span>
+            </div>
+          </div>
+
+          <div class="billing-info">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <circle
+                cx="8"
+                cy="8"
+                r="7"
+                stroke="currentColor"
+                stroke-width="1.5"></circle>
+              <path
+                d="M8 5v3l2 2"
+                stroke="currentColor"
+                stroke-width="1.5"
+                stroke-linecap="round"></path>
+            </svg>
+            <span>Se cobrará mensualmente hasta que canceles</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="decorative-bg">
+      <div class="blob blob-1"></div>
+      <div class="blob blob-2"></div>
+      <div class="blob blob-3"></div>
+    </div>
+  </div>
+
+  <div class="success-modal" id="success-modal" data-is-upgrade={isUpgrade}>
+    <div class="modal-content">
+      <div class="success-icon">
+        <svg width="64" height="64" viewBox="0 0 64 64" fill="none">
+          <circle cx="32" cy="32" r="30" stroke="currentColor" stroke-width="3"
+          ></circle>
+          <path
+            d="M20 32l8 8 16-16"
+            stroke="currentColor"
+            stroke-width="3"
+            stroke-linecap="round"></path>
+        </svg>
+      </div>
+      <h2>{isUpgrade ? "¡Plan actualizado!" : "¡Pago exitoso!"}</h2>
+      <p>
+        {
+          isUpgrade
+            ? `Tu plan ha sido actualizado a ${selectedPlan.name}`
+            : `Tu suscripción al plan ${selectedPlan.name} ha sido activada`
+        }
+      </p>
+      <button class="btn btn-primary" id="success-btn">
+        {isUpgrade ? "Ver mi perfil" : "Ir al Dashboard"}
+      </button>
+    </div>
+  </div>
+</Layout>
+
+<style>
+  :root {
+    /* Violet - Primary brand */
+    --violet-50: #faf5ff;
+    --violet-100: #f3e8ff;
+    --violet-200: #e9d5ff;
+    --violet-300: #d8b4fe;
+    --violet-400: #c084fc;
+    --violet-500: #a855f7;
+    --violet-600: #9333ea;
+    --violet-700: #7e22ce;
+    --violet-800: #6b21a8;
+    --violet-900: #581c87;
+    --violet-950: #3b0764;
+
+    /* Fuchsia/Magenta - Energetic accent */
+    --fuchsia-50: #fdf4ff;
+    --fuchsia-100: #fae8ff;
+    --fuchsia-200: #f5d0fe;
+    --fuchsia-300: #f0abfc;
+    --fuchsia-400: #e879f9;
+    --fuchsia-500: #d946ef;
+    --fuchsia-600: #c026d3;
+    --fuchsia-700: #a21caf;
+    --fuchsia-800: #86198f;
+    --fuchsia-900: #701a75;
+
+    /* Orange/Coral - Warm energy */
+    --orange-50: #fff7ed;
+    --orange-100: #ffedd5;
+    --orange-200: #fed7aa;
+    --orange-300: #fdba74;
+    --orange-400: #fb923c;
+    --orange-500: #f97316;
+    --orange-600: #ea580c;
+    --orange-700: #c2410c;
+    --orange-800: #9a3412;
+    --orange-900: #7c2d12;
+
+    /* Cyan - Cool highlight */
+    --cyan-50: #ecfeff;
+    --cyan-100: #cffafe;
+    --cyan-200: #a5f3fc;
+    --cyan-300: #67e8f9;
+    --cyan-400: #22d3ee;
+    --cyan-500: #06b6d4;
+    --cyan-600: #0891b2;
+    --cyan-700: #0e7490;
+    --cyan-800: #155e75;
+    --cyan-900: #164e63;
+
+    /* Extended neutrals */
+    --slate-50: #f8fafc;
+    --slate-100: #f1f5f9;
+    --slate-200: #e2e8f0;
+    --slate-300: #cbd5e1;
+    --slate-400: #94a3b8;
+    --slate-500: #64748b;
+    --slate-600: #475569;
+    --slate-700: #334155;
+    --slate-800: #1e293b;
+    --slate-900: #0f172a;
+    --slate-950: #020617;
+  }
+
+  .checkout-container {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+    background: linear-gradient(135deg, #020617 0%, #0c4a6e 50%, #1e293b 100%);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .decorative-bg {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    overflow: hidden;
+    pointer-events: none;
+  }
+
+  .blob {
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(80px);
+    opacity: 0.3;
+    animation: float 20s infinite ease-in-out;
+  }
+
+  .blob-1 {
+    width: 500px;
+    height: 500px;
+    background: linear-gradient(45deg, var(--violet-600), var(--fuchsia-600));
+    top: -250px;
+    left: -250px;
+    animation-delay: 0s;
+  }
+
+  .blob-2 {
+    width: 400px;
+    height: 400px;
+    background: linear-gradient(45deg, var(--orange-500), var(--fuchsia-500));
+    bottom: -200px;
+    right: -200px;
+    animation-delay: -7s;
+  }
+
+  .blob-3 {
+    width: 350px;
+    height: 350px;
+    background: linear-gradient(45deg, var(--cyan-500), var(--violet-600));
+    top: 50%;
+    right: -150px;
+    animation-delay: -14s;
+  }
+
+  @keyframes float {
+    0%,
+    100% {
+      transform: translate(0, 0) scale(1);
+    }
+    33% {
+      transform: translate(30px, -50px) scale(1.1);
+    }
+    66% {
+      transform: translate(-20px, 30px) scale(0.9);
+    }
+  }
+
+  .checkout-wrapper {
+    display: grid;
+    grid-template-columns: 1fr 420px;
+    gap: 2rem;
+    max-width: 1200px;
+    width: 100%;
+    position: relative;
+    z-index: 1;
+    animation: slideUp 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  @keyframes slideUp {
+    from {
+      opacity: 0;
+      transform: translateY(30px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .payment-section,
+  .summary-section {
+    background: rgba(15, 23, 42, 0.85);
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 24px;
+    padding: 2.5rem;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  }
+
+  .section-header {
+    margin-bottom: 2rem;
+  }
+
+  .back-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--slate-400);
+    text-decoration: none;
+    font-size: 0.9rem;
+    margin-bottom: 1rem;
+    transition: color 0.3s ease;
+  }
+
+  .back-link:hover {
+    color: var(--violet-400);
+  }
+
+  .section-header h1 {
+    font-size: 2rem;
+    font-weight: 800;
+    background: linear-gradient(
+      135deg,
+      var(--violet-400) 0%,
+      var(--fuchsia-500) 50%,
+      var(--orange-400) 100%
+    );
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: 0.5rem;
+    letter-spacing: -0.02em;
+  }
+
+  .subtitle {
+    color: var(--slate-400);
+    font-size: 0.95rem;
+  }
+
+  .payment-form {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+
+  .form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .form-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+  }
+
+  label {
+    color: var(--slate-50);
+    font-weight: 500;
+    font-size: 0.9rem;
+  }
+
+  .input-wrapper {
+    position: relative;
+  }
+
+  input[type="text"] {
+    width: 100%;
+    padding: 0.875rem 1rem;
+    background: rgba(0, 0, 0, 0.3);
+    border: 1.5px solid rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+    color: var(--slate-50);
+    font-size: 1rem;
+    transition: all 0.3s ease;
+  }
+
+  input[type="text"]:focus {
+    outline: none;
+    border-color: var(--violet-500);
+    background: rgba(0, 0, 0, 0.4);
+    box-shadow: 0 0 0 3px rgba(168, 85, 247, 0.2);
+  }
+
+  input.error {
+    border-color: #ef4444;
+    background: rgba(239, 68, 68, 0.1);
+  }
+
+  input::placeholder {
+    color: var(--slate-500);
+  }
+
+  .card-icons {
+    position: absolute;
+    right: 1rem;
+    top: 50%;
+    transform: translateY(-50%);
+    display: flex;
+    gap: 0.5rem;
+  }
+
+  .card-icon {
+    opacity: 0.7;
+  }
+
+  .btn {
+    width: 100%;
+    padding: 1rem 1.5rem;
+    border: none;
+    border-radius: 12px;
+    font-weight: 600;
+    font-size: 1rem;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+  }
+
+  .btn-primary {
+    background: linear-gradient(
+      135deg,
+      var(--violet-600) 0%,
+      var(--fuchsia-600) 100%
+    );
+    color: white;
+    box-shadow: 0 4px 20px rgba(147, 51, 234, 0.5);
+  }
+
+  .btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 30px rgba(192, 38, 211, 0.6);
+  }
+
+  .btn-primary:active {
+    transform: translateY(0);
+  }
+
+  .arrow {
+    transition: transform 0.3s ease;
+  }
+
+  .btn:hover .arrow {
+    transform: translateX(4px);
+  }
+
+  .error-message {
+    display: block;
+    color: #ef4444;
+    font-size: 0.875rem;
+    min-height: 1.25rem;
+    animation: shake 0.3s ease;
+  }
+
+  .error-message.general {
+    margin: 0;
+    padding: 0.75rem 1rem;
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    border-radius: 8px;
+    text-align: center;
+  }
+
+  .error-message:empty,
+  .error-message.general:empty {
+    display: none;
+  }
+
+  @keyframes shake {
+    0%,
+    100% {
+      transform: translateX(0);
+    }
+    25% {
+      transform: translateX(-5px);
+    }
+    75% {
+      transform: translateX(5px);
+    }
+  }
+
+  .terms {
+    text-align: center;
+    font-size: 0.85rem;
+    color: var(--slate-400);
+    line-height: 1.6;
+  }
+
+  .terms a {
+    color: var(--violet-400);
+    text-decoration: none;
+  }
+
+  .terms a:hover {
+    text-decoration: underline;
+  }
+
+  /* Summary Section */
+  .summary-card {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+
+  .summary-card h2 {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--slate-50);
+  }
+
+  .plan-summary {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .plan-details h3 {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--slate-50);
+    margin-bottom: 0.25rem;
+  }
+
+  .plan-price {
+    font-size: 1.5rem;
+    font-weight: 900;
+    background: linear-gradient(
+      135deg,
+      var(--cyan-300) 0%,
+      var(--violet-400) 50%,
+      var(--fuchsia-400) 100%
+    );
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .plan-price span {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--slate-400);
+  }
+
+  .divider {
+    height: 1px;
+    background: rgba(255, 255, 255, 0.08);
+  }
+
+  .features-list h4 {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--slate-300);
+    margin-bottom: 0.75rem;
+  }
+
+  .features-list ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .features-list li {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    color: var(--slate-200);
+    font-size: 0.9rem;
+    line-height: 1.5;
+  }
+
+  .features-list li svg {
+    flex-shrink: 0;
+    margin-top: 0.1rem;
+    color: var(--cyan-400);
+  }
+
+  .features-list li.disabled {
+    color: var(--slate-500);
+    opacity: 0.5;
+  }
+
+  .features-list li.disabled svg {
+    color: var(--slate-600);
+  }
+
+  .total-section {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .total-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    color: var(--slate-300);
+    font-size: 0.95rem;
+  }
+
+  .total-row.total {
+    padding-top: 0.75rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--slate-50);
+  }
+
+  .billing-info {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 1rem;
+    background: rgba(168, 85, 247, 0.1);
+    border: 1px solid rgba(168, 85, 247, 0.2);
+    border-radius: 12px;
+    color: var(--violet-300);
+    font-size: 0.85rem;
+    line-height: 1.4;
+  }
+
+  .billing-info svg {
+    flex-shrink: 0;
+  }
+
+  /* Success Modal */
+  .success-modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.8);
+    backdrop-filter: blur(8px);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    animation: fadeIn 0.3s ease;
+  }
+
+  .success-modal.show {
+    display: flex;
+  }
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  .modal-content {
+    background: rgba(15, 23, 42, 0.95);
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 24px;
+    padding: 3rem 2.5rem;
+    max-width: 450px;
+    text-align: center;
+    animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  }
+
+  .success-icon {
+    margin: 0 auto 1.5rem;
+    width: 64px;
+    height: 64px;
+    color: var(--cyan-400);
+  }
+
+  .modal-content h2 {
+    font-size: 1.75rem;
+    font-weight: 800;
+    background: linear-gradient(135deg, var(--violet-400), var(--fuchsia-500));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: 0.75rem;
+  }
+
+  .modal-content p {
+    color: var(--slate-300);
+    font-size: 1rem;
+    line-height: 1.6;
+    margin-bottom: 2rem;
+  }
+
+  .modal-content p strong {
+    color: var(--violet-400);
+    font-weight: 700;
+  }
+
+  @media (max-width: 1024px) {
+    .checkout-wrapper {
+      grid-template-columns: 1fr;
+      max-width: 600px;
+    }
+
+    .summary-section {
+      order: -1;
+    }
+  }
+
+  @media (max-width: 640px) {
+    .checkout-container {
+      padding: 1rem;
+    }
+
+    .payment-section,
+    .summary-section {
+      padding: 2rem 1.5rem;
+    }
+
+    .section-header h1 {
+      font-size: 1.75rem;
+    }
+
+    .form-row {
+      grid-template-columns: 1fr;
+    }
+
+    .modal-content {
+      padding: 2rem 1.5rem;
+      margin: 1rem;
+    }
+  }
+</style>
+
+<script>
+  // Format card number
+  const cardNumberInput = document.getElementById(
+    "card-number",
+  ) as HTMLInputElement;
+  const cardExpiryInput = document.getElementById(
+    "card-expiry",
+  ) as HTMLInputElement;
+  const cardCvvInput = document.getElementById("card-cvv") as HTMLInputElement;
+  const paymentForm = document.getElementById(
+    "payment-form",
+  ) as HTMLFormElement;
+
+  function formatCardNumber(value: string): string {
+    const cleaned = value.replace(/\s/g, "");
+    const groups = cleaned.match(/.{1,4}/g);
+    return groups ? groups.join(" ") : cleaned;
+  }
+
+  function formatExpiry(value: string): string {
+    const cleaned = value.replace(/\D/g, "");
+    if (cleaned.length >= 2) {
+      return cleaned.substring(0, 2) + "/" + cleaned.substring(2, 4);
+    }
+    return cleaned;
+  }
+
+  cardNumberInput?.addEventListener("input", (e) => {
+    const input = e.target as HTMLInputElement;
+    const cleaned = input.value.replace(/\D/g, "");
+    input.value = formatCardNumber(cleaned);
+  });
+
+  cardExpiryInput?.addEventListener("input", (e) => {
+    const input = e.target as HTMLInputElement;
+    input.value = formatExpiry(input.value);
+  });
+
+  cardCvvInput?.addEventListener("input", (e) => {
+    const input = e.target as HTMLInputElement;
+    input.value = input.value.replace(/\D/g, "");
+  });
+
+  // Clear errors on input
+  function setupErrorClear(form: HTMLFormElement) {
+    const inputs = form.querySelectorAll("input");
+    inputs.forEach((input) => {
+      input.addEventListener("input", () => {
+        input.classList.remove("error");
+        const errorId = input.id + "-error";
+        const errorElement = document.getElementById(errorId);
+        if (errorElement) errorElement.textContent = "";
+      });
+    });
+  }
+
+  function showError(inputId: string, message: string) {
+    const input = document.getElementById(inputId) as HTMLInputElement;
+    const errorElement = document.getElementById(inputId + "-error");
+
+    if (input) {
+      input.classList.add("error");
+      input.focus();
+    }
+    if (errorElement) {
+      errorElement.textContent = message;
+    }
+  }
+
+  function showGeneralError(message: string) {
+    const errorElement = document.getElementById("payment-general-error");
+    if (errorElement) {
+      errorElement.textContent = message;
+    }
+  }
+
+  function clearAllErrors() {
+    const inputs = paymentForm.querySelectorAll("input");
+    inputs.forEach((input) => input.classList.remove("error"));
+
+    const errorMessages = paymentForm.querySelectorAll(".error-message");
+    errorMessages.forEach((msg) => (msg.textContent = ""));
+  }
+
+  function validateCardNumber(cardNumber: string): boolean {
+    const cleaned = cardNumber.replace(/\s/g, "");
+    return /^\d{13,19}$/.test(cleaned);
+  }
+
+  function validateExpiry(expiry: string): boolean {
+    const match = expiry.match(/^(\d{2})\/(\d{2})$/);
+    if (!match) return false;
+
+    const month = parseInt(match[1]);
+    const year = parseInt("20" + match[2]);
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth() + 1;
+
+    if (month < 1 || month > 12) return false;
+    if (year < currentYear) return false;
+    if (year === currentYear && month < currentMonth) return false;
+
+    return true;
+  }
+
+  function validateCVV(cvv: string): boolean {
+    return /^\d{3}$/.test(cvv);
+  }
+
+  if (paymentForm) {
+    setupErrorClear(paymentForm);
+
+    paymentForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      clearAllErrors();
+
+      const cardNumber = cardNumberInput.value;
+      const cardName = (
+        document.getElementById("card-name") as HTMLInputElement
+      ).value;
+      const cardExpiry = cardExpiryInput.value;
+      const cardCvv = cardCvvInput.value;
+
+      let hasError = false;
+
+      if (!cardNumber || !validateCardNumber(cardNumber)) {
+        showError("card-number", "Número de tarjeta inválido");
+        hasError = true;
+      }
+
+      if (!cardName || cardName.length < 3) {
+        showError("card-name", "Ingresa el nombre como aparece en la tarjeta");
+        hasError = true;
+      }
+
+      if (!cardExpiry || !validateExpiry(cardExpiry)) {
+        showError("card-expiry", "Fecha de expiración inválida");
+        hasError = true;
+      }
+
+      if (!cardCvv || !validateCVV(cardCvv)) {
+        showError("card-cvv", "CVV inválido");
+        hasError = true;
+      }
+
+      if (hasError) return;
+
+      // Simulate payment processing
+      const submitButton = paymentForm.querySelector(
+        'button[type="submit"]',
+      ) as HTMLButtonElement;
+      const originalText = submitButton.innerHTML;
+      submitButton.disabled = true;
+      submitButton.innerHTML = "<span>Procesando pago...</span>";
+
+      // Simulate API call
+      setTimeout(async () => {
+        // Determinar si es upgrade o nuevo registro
+        const isUpgrade = paymentForm.dataset.isUpgrade === "true";
+        const planSlug = paymentForm.dataset.planSlug;
+
+        if (isUpgrade) {
+          // FLUJO: Usuario autenticado cambiando de plan
+          console.log("Procesando cambio de plan a:", planSlug);
+
+          try {
+            const response = await fetch("/api/user/update-plan", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ planSlug }),
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+              // Mostrar modal de éxito
+              const successModal = document.getElementById("success-modal");
+              if (successModal) {
+                successModal.classList.add("show");
+              }
+            } else {
+              console.error("Plan update failed:", data.error);
+              showGeneralError(
+                data.error ||
+                  "Error al actualizar el plan. Por favor contacta a soporte.",
+              );
+              submitButton.innerHTML = originalText;
+              submitButton.disabled = false;
+            }
+          } catch (error) {
+            console.error("Error updating plan:", error);
+            showGeneralError(
+              "Error al procesar el cambio de plan. Por favor contacta a soporte.",
+            );
+            submitButton.innerHTML = originalText;
+            submitButton.disabled = false;
+          }
+        } else {
+          // FLUJO: Nuevo registro con suscripción
+          // Get signup data from sessionStorage
+          const signupDataStr = sessionStorage.getItem("signupData");
+
+          console.log("Signup data from sessionStorage:", signupDataStr);
+
+          if (signupDataStr) {
+            try {
+              const signupData = JSON.parse(signupDataStr);
+
+              console.log("Parsed signup data:", signupData);
+
+              // Complete the signup with payment confirmation
+              const response = await fetch("/api/auth/signup", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  name: signupData.name,
+                  email: signupData.email,
+                  password: signupData.password,
+                  isOrganizer: signupData.isOrganizer,
+                  subscriptionPlan: signupData.subscriptionPlan,
+                  paymentConfirmed: true,
+                }),
+              });
+
+              console.log("Response status:", response.status);
+
+              const data = await response.json();
+
+              console.log("Response data:", data);
+
+              if (data.success) {
+                // Clear signup data
+                sessionStorage.removeItem("signupData");
+
+                // Show success modal
+                const successModal = document.getElementById("success-modal");
+                if (successModal) {
+                  successModal.classList.add("show");
+                }
+              } else {
+                console.error("Signup failed:", data.error);
+
+                // Check if it's a duplicate email error
+                if (
+                  data.errorType === "duplicate_email" ||
+                  response.status === 409
+                ) {
+                  showGeneralError(
+                    "Este correo ya está registrado. Por favor inicia sesión o regresa y usa otro email.",
+                  );
+                } else {
+                  showGeneralError(
+                    data.error ||
+                      "Error al crear cuenta. Por favor contacta a soporte.",
+                  );
+                }
+
+                submitButton.innerHTML = originalText;
+                submitButton.disabled = false;
+              }
+            } catch (error) {
+              console.error("Error creating account:", error);
+              showGeneralError(
+                "Error al procesar el pago. Por favor contacta a soporte.",
+              );
+              submitButton.innerHTML = originalText;
+              submitButton.disabled = false;
+            }
+          } else {
+            console.error("No signup data found in sessionStorage");
+            showGeneralError(
+              "No se encontraron datos de registro. Por favor vuelve a intentar desde el inicio.",
+            );
+            submitButton.innerHTML = originalText;
+            submitButton.disabled = false;
+          }
+        }
+      }, 2000);
+    });
+  }
+
+  // Manejador del botón del modal de éxito
+  const successBtn = document.getElementById("success-btn");
+  const successModal = document.getElementById("success-modal");
+
+  if (successBtn && successModal) {
+    successBtn.addEventListener("click", () => {
+      const isUpgrade = successModal.dataset.isUpgrade === "true";
+      window.location.href = isUpgrade ? "/profile" : "/dashboard";
+    });
+  }
+</script>

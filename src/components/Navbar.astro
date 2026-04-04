@@ -1,0 +1,600 @@
+---
+interface Props {
+  activePage?: "explorar" | "mis-eventos" | "crear-evento";
+  isOrganizer?: boolean;
+  isAuthenticated?: boolean;
+}
+
+const {
+  activePage = "explorar",
+  isOrganizer = false,
+  isAuthenticated = false,
+} = Astro.props;
+---
+
+<nav class="navbar">
+  <div class="nav-container">
+    <h1 class="logo">EventHub</h1>
+    
+    <!-- Menú desktop -->
+    <div class="nav-links">
+      <a
+        href="/dashboard"
+        class={`nav-link ${activePage === "explorar" ? "active" : ""}`}
+      >
+        Explorar
+      </a>
+      {
+        isOrganizer && (
+          <>
+            <a
+              href="/my-events"
+              class={`nav-link ${activePage === "mis-eventos" ? "active" : ""}`}
+            >
+              Mis Eventos
+            </a>
+            <a
+              href="/create-event"
+              class={`nav-link nav-link-primary ${activePage === "crear-evento" ? "active" : ""}`}
+            >
+              Crear Evento
+            </a>
+          </>
+        )
+      }
+    </div>
+
+    <!-- Acciones desktop -->
+    <div class="nav-actions">
+      {
+        isAuthenticated ? (
+          <>
+            <a href="/profile" class="profile-avatar" title="Mi Perfil">
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none">
+                <circle
+                  cx="12"
+                  cy="8"
+                  r="4"
+                  stroke="currentColor"
+                  stroke-width="2"
+                />
+                <path
+                  d="M5 20c0-4 3-6 7-6s7 2 7 6"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                />
+              </svg>
+            </a>
+            <form action="/api/auth/logout" method="POST">
+              <button type="submit" class="btn-logout">
+                Cerrar Sesión
+              </button>
+            </form>
+          </>
+        ) : (
+          <a href="/login" class="btn-login">
+            Iniciar Sesión
+          </a>
+        )
+      }
+    </div>
+
+    <!-- Botón hamburguesa (solo móvil) -->
+    <button type="button" class="hamburger" aria-label="Menú" id="hamburger">
+      <span></span>
+      <span></span>
+      <span></span>
+    </button>
+  </div>
+</nav>
+
+<!-- Menú móvil overlay (fuera del nav para evitar problemas de z-index) -->
+<div class="mobile-menu-backdrop" id="mobile-menu-backdrop"></div>
+<div class="mobile-menu" id="mobile-menu">
+  <div class="mobile-menu-header">
+    <h2 class="mobile-menu-logo">EventHub</h2>
+    <button type="button" class="close-menu" aria-label="Cerrar menú" id="close-menu">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+        <path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+      </svg>
+    </button>
+  </div>
+
+  <div class="mobile-menu-links">
+    <a
+      href="/dashboard"
+      class={`mobile-nav-link ${activePage === "explorar" ? "active" : ""}`}
+    >
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+        <circle cx="11" cy="11" r="8" stroke="currentColor" stroke-width="2"/>
+        <path d="M21 21l-4.35-4.35" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+      </svg>
+      Explorar
+    </a>
+    {
+      isOrganizer && (
+        <>
+          <a
+            href="/my-events"
+            class={`mobile-nav-link ${activePage === "mis-eventos" ? "active" : ""}`}
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+              <rect x="3" y="4" width="18" height="18" rx="2" stroke="currentColor" stroke-width="2"/>
+              <path d="M16 2v4M8 2v4M3 10h18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+            Mis Eventos
+          </a>
+          <a
+            href="/create-event"
+            class={`mobile-nav-link mobile-nav-link-primary ${activePage === "crear-evento" ? "active" : ""}`}
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+              <path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+            Crear Evento
+          </a>
+        </>
+      )
+    }
+  </div>
+
+  <div class="mobile-menu-actions">
+    {
+      isAuthenticated ? (
+        <>
+          <a href="/profile" class="mobile-profile-link">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+              <circle cx="12" cy="8" r="4" stroke="currentColor" stroke-width="2"/>
+              <path d="M5 20c0-4 3-6 7-6s7 2 7 6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+            Mi Perfil
+          </a>
+          <form action="/api/auth/logout" method="POST">
+            <button type="submit" class="mobile-btn-logout">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+              Cerrar Sesión
+            </button>
+          </form>
+        </>
+      ) : (
+        <a href="/login" class="mobile-btn-login">
+          Iniciar Sesión
+        </a>
+      )
+    }
+  </div>
+</div>
+
+<style>
+  .navbar {
+    background: rgba(37, 37, 64, 0.8);
+    backdrop-filter: blur(20px);
+    border-bottom: 1px solid var(--border);
+    padding: 1.25rem 0;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+
+  .nav-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 2rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .logo {
+    font-size: 1.5rem;
+    font-weight: 700;
+    background: linear-gradient(135deg, var(--violet-400), var(--fuchsia-400));
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .nav-links {
+    display: flex;
+    gap: 2rem;
+    align-items: center;
+  }
+
+  .nav-link {
+    color: var(--text-muted);
+    text-decoration: none;
+    font-weight: 500;
+    transition: color 0.2s ease;
+    position: relative;
+  }
+
+  .nav-link:hover {
+    color: var(--text);
+  }
+
+  .nav-link.active {
+    color: var(--violet-400);
+  }
+
+  .nav-link.active::after {
+    content: "";
+    position: absolute;
+    bottom: -0.5rem;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, var(--violet-600), var(--fuchsia-600));
+  }
+
+  .nav-link-primary {
+    color: var(--violet-400);
+    padding: 0.5rem 1rem;
+    background: rgba(147, 51, 234, 0.1);
+    border-radius: 8px;
+    border: 1px solid rgba(147, 51, 234, 0.3);
+  }
+
+  .nav-link-primary:hover {
+    background: rgba(147, 51, 234, 0.2);
+    color: var(--violet-300);
+  }
+
+  .nav-link-primary.active {
+    background: rgba(147, 51, 234, 0.25);
+    border-color: rgba(147, 51, 234, 0.5);
+  }
+
+  .nav-actions {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+  }
+
+  .profile-avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: rgba(147, 51, 234, 0.1);
+    border: 2px solid rgba(147, 51, 234, 0.3);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--violet-400);
+    transition: all 0.3s ease;
+    cursor: pointer;
+  }
+
+  .profile-avatar:hover {
+    background: rgba(147, 51, 234, 0.2);
+    border-color: rgba(147, 51, 234, 0.5);
+    transform: scale(1.05);
+  }
+
+  .btn-logout {
+    padding: 0.5rem 1rem;
+    background: rgba(249, 115, 22, 0.1);
+    border: 1px solid rgba(249, 115, 22, 0.3);
+    border-radius: 8px;
+    color: var(--orange-400);
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.3s ease;
+  }
+
+  .btn-logout:hover {
+    background: rgba(249, 115, 22, 0.2);
+    border-color: rgba(249, 115, 22, 0.5);
+  }
+
+  .btn-login {
+    padding: 0.5rem 1.25rem;
+    background: linear-gradient(135deg, var(--violet-600), var(--fuchsia-600));
+    border: none;
+    border-radius: 8px;
+    color: var(--text);
+    font-weight: 600;
+    text-decoration: none;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 12px rgba(147, 51, 234, 0.3);
+  }
+
+  .btn-login:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(147, 51, 234, 0.4);
+  }
+
+  /* Hamburger button (mobile only) */
+  .hamburger {
+    display: none;
+    flex-direction: column;
+    justify-content: space-around;
+    width: 28px;
+    height: 24px;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    padding: 0;
+    z-index: 150;
+  }
+
+  .hamburger span {
+    width: 100%;
+    height: 3px;
+    background: var(--violet-400);
+    border-radius: 2px;
+    transition: all 0.3s ease;
+    transform-origin: center;
+  }
+
+  .hamburger.open span:nth-child(1) {
+    transform: translateY(10.5px) rotate(45deg);
+  }
+
+  .hamburger.open span:nth-child(2) {
+    opacity: 0;
+    transform: scaleX(0);
+  }
+
+  .hamburger.open span:nth-child(3) {
+    transform: translateY(-10.5px) rotate(-45deg);
+  }
+
+  /* Mobile menu backdrop */
+  .mobile-menu-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.7);
+    z-index: 130;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.3s ease, visibility 0.3s ease;
+  }
+
+  .mobile-menu-backdrop.open {
+    opacity: 1;
+    visibility: visible;
+  }
+
+  /* Mobile menu overlay */
+  .mobile-menu {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 85%;
+    max-width: 400px;
+    background: rgba(30, 30, 50, 0.98);
+    backdrop-filter: blur(20px);
+    border-left: 1px solid var(--border);
+    z-index: 140;
+    transform: translateX(100%);
+    transition: transform 0.3s ease;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+  }
+
+  .mobile-menu.open {
+    transform: translateX(0);
+  }
+
+  .mobile-menu-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1.5rem 1.5rem;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .mobile-menu-logo {
+    font-size: 1.25rem;
+    font-weight: 700;
+    background: linear-gradient(135deg, var(--violet-400), var(--fuchsia-400));
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin: 0;
+  }
+
+  .close-menu {
+    width: 40px;
+    height: 40px;
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    transition: all 0.2s ease;
+  }
+
+  .close-menu:hover {
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text);
+  }
+
+  .mobile-menu-links {
+    display: flex;
+    flex-direction: column;
+    padding: 1rem 0;
+    gap: 0.5rem;
+  }
+
+  .mobile-nav-link {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 1rem 1.5rem;
+    color: var(--text-muted);
+    text-decoration: none;
+    font-weight: 500;
+    transition: all 0.2s ease;
+  }
+
+  .mobile-nav-link:hover {
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text);
+  }
+
+  .mobile-nav-link.active {
+    color: var(--violet-400);
+    background: rgba(147, 51, 234, 0.1);
+    border-left: 3px solid var(--violet-400);
+  }
+
+  .mobile-nav-link-primary {
+    color: var(--violet-400);
+    background: rgba(147, 51, 234, 0.15);
+    border-left: 3px solid var(--violet-500);
+  }
+
+  .mobile-nav-link-primary:hover {
+    background: rgba(147, 51, 234, 0.25);
+  }
+
+  .mobile-menu-actions {
+    margin-top: auto;
+    padding: 1.5rem;
+    border-top: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .mobile-profile-link {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    color: var(--text);
+    text-decoration: none;
+    font-weight: 500;
+    background: rgba(147, 51, 234, 0.1);
+    border: 1px solid rgba(147, 51, 234, 0.3);
+    border-radius: 8px;
+    transition: all 0.2s ease;
+  }
+
+  .mobile-profile-link:hover {
+    background: rgba(147, 51, 234, 0.2);
+  }
+
+  .mobile-btn-logout {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1rem;
+    background: rgba(249, 115, 22, 0.1);
+    border: 1px solid rgba(249, 115, 22, 0.3);
+    border-radius: 8px;
+    color: var(--orange-400);
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    width: 100%;
+  }
+
+  .mobile-btn-logout:hover {
+    background: rgba(249, 115, 22, 0.2);
+  }
+
+  .mobile-btn-login {
+    display: block;
+    padding: 0.875rem 1.25rem;
+    background: linear-gradient(135deg, var(--violet-600), var(--fuchsia-600));
+    border: none;
+    border-radius: 8px;
+    color: var(--text);
+    font-weight: 600;
+    text-decoration: none;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 12px rgba(147, 51, 234, 0.3);
+  }
+
+  .mobile-btn-login:hover {
+    box-shadow: 0 6px 16px rgba(147, 51, 234, 0.4);
+  }
+
+  @media (max-width: 768px) {
+    .nav-container {
+      padding: 0 1rem;
+    }
+
+    /* Hide desktop navigation */
+    .nav-links,
+    .nav-actions {
+      display: none;
+    }
+
+    /* Show hamburger button */
+    .hamburger {
+      display: flex;
+    }
+
+    .logo {
+      font-size: 1.25rem;
+    }
+  }
+</style>
+
+<script>
+  // Mobile menu toggle functionality
+  const hamburger = document.getElementById('hamburger');
+  const mobileMenu = document.getElementById('mobile-menu');
+  const mobileMenuBackdrop = document.getElementById('mobile-menu-backdrop');
+  const closeMenuBtn = document.getElementById('close-menu');
+  const mobileNavLinks = document.querySelectorAll('.mobile-nav-link');
+
+  function openMenu() {
+    hamburger?.classList.add('open');
+    mobileMenu?.classList.add('open');
+    mobileMenuBackdrop?.classList.add('open');
+    document.body.style.overflow = 'hidden'; // Prevent background scrolling
+  }
+
+  function closeMenu() {
+    hamburger?.classList.remove('open');
+    mobileMenu?.classList.remove('open');
+    mobileMenuBackdrop?.classList.remove('open');
+    document.body.style.overflow = ''; // Restore scrolling
+  }
+
+  // Toggle menu with hamburger button
+  hamburger?.addEventListener('click', () => {
+    if (mobileMenu?.classList.contains('open')) {
+      closeMenu();
+    } else {
+      openMenu();
+    }
+  });
+
+  // Close menu with close button
+  closeMenuBtn?.addEventListener('click', closeMenu);
+
+  // Close menu when clicking nav links
+  mobileNavLinks.forEach((link) => {
+    link.addEventListener('click', closeMenu);
+  });
+
+  // Close menu when clicking backdrop
+  mobileMenuBackdrop?.addEventListener('click', closeMenu);
+
+  // Close menu on ESC key
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && mobileMenu?.classList.contains('open')) {
+      closeMenu();
+    }
+  });
+</script>

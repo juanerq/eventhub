@@ -1,0 +1,2058 @@
+---
+import Layout from "../layouts/Layout.astro";
+import Navbar from "../components/Navbar.astro";
+import LoadingState from "../components/LoadingState.astro";
+import EmptyState from "../components/EmptyState.astro";
+import SearchBar from "../components/SearchBar.astro";
+import FilterSection from "../components/FilterSection.astro";
+import MapLocationFilter from "../components/MapLocationFilter.astro";
+import EventCard from "../components/EventCard.astro";
+import { getUser } from "../lib/auth";
+import { supabaseAdmin } from "../lib/supabase";
+
+const user = await getUser(Astro.cookies);
+
+// Permitir acceso sin usuario para ver eventos
+// El usuario solo necesita estar autenticado para inscribirse
+const isOrganizer = user?.user_metadata?.is_organizer || false;
+
+// Obtener filtros de la URL
+const category = Astro.url.searchParams.get("category") || "all";
+const search = Astro.url.searchParams.get("search") || "";
+
+// Cargar eventos desde Supabase
+let query = supabaseAdmin
+  .from("events")
+  .select("*")
+  .eq("status", "published")
+  .order("is_featured", { ascending: false })
+  .order("start_date", { ascending: true });
+
+if (category && category !== "all") {
+  query = query.eq("category", category);
+}
+
+const { data: events } = await query;
+
+// Cargar imagen primaria para cada evento
+const eventsWithImages = await Promise.all(
+  (events || []).map(async (event) => {
+    const { data: image } = await supabaseAdmin
+      .from("event_images")
+      .select("image_url")
+      .eq("event_id", event.id)
+      .eq("is_primary", true)
+      .single();
+
+    return {
+      ...event,
+      image_url: image?.image_url || null,
+    };
+  }),
+);
+---
+
+<Layout title="Dashboard">
+  <div class="dashboard">
+    <Navbar
+      activePage="explorar"
+      isOrganizer={isOrganizer}
+      isAuthenticated={!!user}
+    />
+
+    <main class="main-content">
+      <div class="container">
+        <div class="events-section" id="events-section">
+          <div class="section-header">
+            <h3>Explorar Eventos</h3>
+          </div>
+
+          <!-- Barra de búsqueda y filtros -->
+          <div class="search-filters-container">
+            <!-- Barra de búsqueda con ordenar -->
+            <div class="search-bar-row">
+              <SearchBar
+                id="search-input"
+                placeholder="Buscar eventos por nombre, categoría o ubicación..."
+              />
+
+              <div class="sort-wrapper">
+                <label class="sort-label">Ordenar por</label>
+                <select id="sort-filter" class="sort-select">
+                  <option value="date-asc">Fecha (próximos)</option>
+                  <option value="date-desc">Fecha (más lejanos)</option>
+                  <option value="price-asc">Precio (menor a mayor)</option>
+                  <option value="price-desc">Precio (mayor a menor)</option>
+                  <option value="name">Nombre (A-Z)</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Filtros -->
+            <div class="filters-wrapper">
+              <!-- Panel lateral de filtros -->
+              <div class="filters-sidebar">
+                <!-- Filtro de ubicación -->
+                <FilterSection label="Ubicación cercana">
+                  <MapLocationFilter id="map-location-filter" />
+                </FilterSection>
+
+                <!-- Filtro de fecha -->
+                <FilterSection label="Fecha del evento">
+                  <div class="date-filter-group">
+                    <label class="filter-label-small">Desde</label>
+                    <input
+                      type="date"
+                      id="date-from"
+                      class="filter-input date-input"
+                      placeholder="Fecha inicio"
+                    />
+                  </div>
+                  <div class="date-filter-group">
+                    <label class="filter-label-small">Hasta</label>
+                    <input
+                      type="date"
+                      id="date-to"
+                      class="filter-input date-input"
+                      placeholder="Fecha fin"
+                    />
+                  </div>
+                </FilterSection>
+
+                <!-- Filtro de categoría -->
+                <FilterSection label="Categorías">
+                  <div id="filters" class="filters">
+                    <button class="filter-btn active" data-category="all">
+                      <span class="filter-icon">🏷️</span>
+                      <span class="filter-text">Todos</span>
+                    </button>
+                  </div>
+                </FilterSection>
+
+                <!-- Filtro de precio -->
+                <FilterSection label="Precio">
+                  <div id="price-filters" class="filters">
+                    <button class="filter-btn active" data-price="all">
+                      <span class="filter-icon">💰</span>
+                      <span class="filter-text">Todos los precios</span>
+                    </button>
+                    <button class="filter-btn" data-price="free">
+                      <span class="filter-icon">🎁</span>
+                      <span class="filter-text">Gratis</span>
+                    </button>
+                    <button class="filter-btn" data-price="paid">
+                      <span class="filter-icon">💵</span>
+                      <span class="filter-text">De pago</span>
+                    </button>
+                    <button class="filter-btn" data-price="0-50000">
+                      <span class="filter-icon">💸</span>
+                      <span class="filter-text">Hasta $50.000</span>
+                    </button>
+                    <button class="filter-btn" data-price="50000-100000">
+                      <span class="filter-icon">💵</span>
+                      <span class="filter-text">$50.000 - $100.000</span>
+                    </button>
+                    <button class="filter-btn" data-price="100000+">
+                      <span class="filter-icon">💎</span>
+                      <span class="filter-text">Más de $100.000</span>
+                    </button>
+                  </div>
+
+                  <!-- Rango personalizado -->
+                  <div class="price-range-inputs">
+                    <div class="price-input-group">
+                      <label class="price-input-label">Mínimo</label>
+                      <input
+                        type="number"
+                        id="price-min"
+                        class="price-input"
+                        placeholder="$ Desde"
+                        min="0"
+                        step="1000"
+                      />
+                    </div>
+                    <div class="price-input-separator">—</div>
+                    <div class="price-input-group">
+                      <label class="price-input-label">Máximo</label>
+                      <input
+                        type="number"
+                        id="price-max"
+                        class="price-input"
+                        placeholder="$ Hasta"
+                        min="0"
+                        step="1000"
+                      />
+                    </div>
+                  </div>
+                </FilterSection>
+
+                <!-- Botón para limpiar filtros -->
+                <button id="clear-filters" class="btn-clear-filters">
+                  <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  >
+                    <path d="M18 6L6 18M6 6l12 12"></path>
+                  </svg>
+                  Limpiar filtros
+                </button>
+              </div>
+
+              <!-- Área de contenido de eventos -->
+              <div class="events-content-area">
+                {
+                  eventsWithImages.length === 0 ? (
+                    <div id="events-empty">
+                      <EmptyState
+                        title="No hay eventos disponibles"
+                        description="Intenta cambiar los filtros o buscar algo diferente"
+                      />
+                    </div>
+                  ) : (
+                    <div id="events-grid" class="events-grid">
+                      {eventsWithImages.map((event, index) => (
+                        <div
+                          class="event-card-wrapper"
+                          data-event-id={event.id}
+                          data-title={event.title.toLowerCase()}
+                          data-description={(
+                            event.description || ""
+                          ).toLowerCase()}
+                          data-category={event.category.toLowerCase()}
+                          data-city={event.city.toLowerCase()}
+                          data-location-name={(
+                            event.location_name || ""
+                          ).toLowerCase()}
+                          data-start-date={event.start_date}
+                          data-price={event.price || 0}
+                          data-is-free={event.is_free ? "true" : "false"}
+                          data-latitude={event.latitude || ""}
+                          data-longitude={event.longitude || ""}
+                        >
+                          <EventCard
+                            event={event}
+                            variant="explore"
+                            index={index}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  )
+                }
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+</Layout>
+
+<style>
+  html {
+    scroll-behavior: smooth;
+  }
+
+  :root {
+    /* Violet - Primary brand */
+    --violet-50: #faf5ff;
+    --violet-100: #f3e8ff;
+    --violet-200: #e9d5ff;
+    --violet-300: #d8b4fe;
+    --violet-400: #c084fc;
+    --violet-500: #a855f7;
+    --violet-600: #9333ea;
+    --violet-700: #7e22ce;
+    --violet-800: #6b21a8;
+    --violet-900: #581c87;
+    --violet-950: #3b0764;
+
+    /* Fuchsia/Magenta - Energetic accent */
+    --fuchsia-50: #fdf4ff;
+    --fuchsia-100: #fae8ff;
+    --fuchsia-200: #f5d0fe;
+    --fuchsia-300: #f0abfc;
+    --fuchsia-400: #e879f9;
+    --fuchsia-500: #d946ef;
+    --fuchsia-600: #c026d3;
+    --fuchsia-700: #a21caf;
+    --fuchsia-800: #86198f;
+    --fuchsia-900: #701a75;
+
+    /* Orange/Coral - Warm energy */
+    --orange-50: #fff7ed;
+    --orange-100: #ffedd5;
+    --orange-200: #fed7aa;
+    --orange-300: #fdba74;
+    --orange-400: #fb923c;
+    --orange-500: #f97316;
+    --orange-600: #ea580c;
+    --orange-700: #c2410c;
+    --orange-800: #9a3412;
+    --orange-900: #7c2d12;
+
+    /* Cyan - Cool highlight */
+    --cyan-50: #ecfeff;
+    --cyan-100: #cffafe;
+    --cyan-200: #a5f3fc;
+    --cyan-300: #67e8f9;
+    --cyan-400: #22d3ee;
+    --cyan-500: #06b6d4;
+    --cyan-600: #0891b2;
+    --cyan-700: #0e7490;
+    --cyan-800: #155e75;
+    --cyan-900: #164e63;
+
+    /* Emerald/Green - Success & Growth */
+    --emerald-50: #ecfdf5;
+    --emerald-100: #d1fae5;
+    --emerald-200: #a7f3d0;
+    --emerald-300: #6ee7b7;
+    --emerald-400: #34d399;
+    --emerald-500: #10b981;
+    --emerald-600: #059669;
+    --emerald-700: #047857;
+    --emerald-800: #065f46;
+    --emerald-900: #064e3b;
+
+    /* Deep Blue/Navy - Professional dark */
+    --navy-50: #f0f9ff;
+    --navy-100: #e0f2fe;
+    --navy-200: #bae6fd;
+    --navy-300: #7dd3fc;
+    --navy-400: #38bdf8;
+    --navy-500: #0ea5e9;
+    --navy-600: #0284c7;
+    --navy-700: #0369a1;
+    --navy-800: #075985;
+    --navy-900: #0c4a6e;
+    --navy-950: #082f49;
+
+    /* Extended neutrals */
+    --slate-50: #f8fafc;
+    --slate-100: #f1f5f9;
+    --slate-200: #e2e8f0;
+    --slate-300: #cbd5e1;
+    --slate-400: #94a3b8;
+    --slate-500: #64748b;
+    --slate-600: #475569;
+    --slate-700: #334155;
+    --slate-800: #1e293b;
+    --slate-900: #0f172a;
+    --slate-950: #020617;
+
+    /* Semantic tokens */
+    --primary: var(--violet-600);
+    --primary-hover: var(--violet-700);
+    --primary-dark: var(--violet-700);
+    --secondary: var(--fuchsia-500);
+    --accent: var(--fuchsia-500);
+    --accent-hover: var(--fuchsia-600);
+    --warm-accent: var(--orange-500);
+    --cool-accent: var(--cyan-400);
+    --dark: var(--slate-950);
+    --dark-light: var(--slate-900);
+    --background: var(--slate-950);
+    --background-light: var(--slate-900);
+    --text: var(--slate-50);
+    --text-muted: var(--slate-400);
+    --success: var(--emerald-500);
+    --border: rgba(255, 255, 255, 0.08);
+  }
+
+  .dashboard {
+    min-height: 100vh;
+    background: linear-gradient(135deg, #020617 0%, #0c4a6e 50%, #1e293b 100%);
+  }
+
+  .main-content {
+    padding: 3rem 0;
+  }
+
+  .container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 2rem;
+  }
+
+  @keyframes fadeInUp {
+    from {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes pulse {
+    0%,
+    100% {
+      transform: scale(1);
+    }
+    50% {
+      transform: scale(1.05);
+    }
+  }
+
+  @keyframes spin {
+    from {
+      transform: rotate(0deg);
+    }
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  :global(.spinner) {
+    animation: spin 1s linear infinite;
+  }
+
+  :global(.event-featured-badge) {
+    animation: pulse 2s ease-in-out infinite;
+  }
+
+  .events-section {
+    animation: fadeInUp 0.6s ease 0.2s backwards;
+  }
+
+  .section-header {
+    margin-bottom: 2rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 1rem;
+  }
+
+  .section-header h3 {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--text);
+    margin-bottom: 0;
+  }
+
+  .btn-create-event {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1.5rem;
+    background: linear-gradient(135deg, var(--violet-600), var(--fuchsia-600));
+    border: none;
+    border-radius: 10px;
+    color: white;
+    font-weight: 600;
+    cursor: pointer;
+    text-decoration: none;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 12px rgba(147, 51, 234, 0.3);
+  }
+
+  .btn-create-event:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(147, 51, 234, 0.4);
+  }
+
+  .btn-create-event svg {
+    flex-shrink: 0;
+  }
+
+  .btn-empty-action {
+    display: inline-block;
+    padding: 0.875rem 2rem;
+    background: linear-gradient(135deg, var(--violet-600), var(--fuchsia-600));
+    border-radius: 10px;
+    color: white;
+    font-weight: 600;
+    text-decoration: none;
+    transition: all 0.3s ease;
+    margin-top: 1.5rem;
+  }
+
+  .btn-empty-action:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(147, 51, 234, 0.4);
+  }
+
+  .search-filters-container {
+    margin-bottom: 2rem;
+  }
+
+  .search-bar-row {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .sort-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    min-width: 280px;
+  }
+
+  .sort-label {
+    font-size: 0.875rem;
+    color: var(--text-muted);
+    white-space: nowrap;
+  }
+
+  .sort-select {
+    flex: 1;
+    padding: 0.875rem 1rem;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    color: var(--text);
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2394a3b8' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.75rem center;
+    padding-right: 2.5rem;
+  }
+
+  .sort-select:hover {
+    background-color: rgba(255, 255, 255, 0.08);
+    border-color: rgba(147, 51, 234, 0.5);
+  }
+
+  .sort-select:focus {
+    outline: none;
+    background-color: rgba(255, 255, 255, 0.08);
+    border-color: var(--primary);
+    box-shadow: 0 0 0 2px rgba(147, 51, 234, 0.1);
+  }
+
+  .sort-select option {
+    background-color: #1a1a2e;
+    color: var(--text);
+    padding: 0.75rem 1rem;
+  }
+
+  .sort-select option:hover,
+  .sort-select option:checked {
+    background: linear-gradient(
+      135deg,
+      rgba(147, 51, 234, 0.2),
+      rgba(219, 39, 119, 0.2)
+    );
+    color: var(--primary);
+  }
+
+  .filters-wrapper {
+    display: grid;
+    grid-template-columns: 280px 1fr;
+    gap: 2rem;
+    align-items: flex-start;
+  }
+
+  .filters-sidebar {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 0;
+    position: sticky;
+    top: 1rem;
+    max-height: calc(100vh - 2rem);
+    overflow-y: auto;
+  }
+
+  .filters-sidebar::-webkit-scrollbar {
+    width: 4px;
+  }
+
+  .filters-sidebar::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.02);
+    border-radius: 4px;
+  }
+
+  .filters-sidebar::-webkit-scrollbar-thumb {
+    background: rgba(147, 51, 234, 0.3);
+    border-radius: 4px;
+  }
+
+  .filters-sidebar::-webkit-scrollbar-thumb:hover {
+    background: rgba(147, 51, 234, 0.5);
+  }
+
+  .filter-section-content {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .date-filter-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .filter-label-small {
+    font-size: 0.8rem;
+    font-weight: 500;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .price-range-inputs {
+    display: flex;
+    align-items: flex-end;
+    gap: 0.75rem;
+    padding: 1rem 1rem 0.5rem 1rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+    margin-top: 0.5rem;
+  }
+
+  .price-input-group {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .price-input-label {
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+  }
+
+  .price-input {
+    width: 100%;
+    padding: 0.625rem 0.75rem;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-size: 0.875rem;
+    transition: all 0.2s ease;
+  }
+
+  .price-input::placeholder {
+    color: var(--text-muted);
+    opacity: 0.6;
+  }
+
+  .price-input:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(147, 51, 234, 0.5);
+  }
+
+  .price-input:focus {
+    outline: none;
+    background: rgba(255, 255, 255, 0.08);
+    border-color: var(--primary);
+    box-shadow: 0 0 0 2px rgba(147, 51, 234, 0.1);
+  }
+
+  .price-input::-webkit-outer-spin-button,
+  .price-input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+
+  .price-input[type="number"] {
+    -moz-appearance: textfield;
+  }
+
+  .price-input-separator {
+    padding-bottom: 0.625rem;
+    color: var(--text-muted);
+    font-weight: 500;
+    font-size: 1rem;
+  }
+
+  .events-content-area {
+    min-height: 400px;
+  }
+
+  .filter-input,
+  .filter-select-full {
+    width: 100%;
+    padding: 0.75rem 1rem;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .filter-input:hover,
+  .filter-select-full:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(147, 51, 234, 0.5);
+  }
+
+  .filter-input:focus,
+  .filter-select-full:focus {
+    outline: none;
+    background: rgba(255, 255, 255, 0.08);
+    border-color: var(--primary);
+    box-shadow: 0 0 0 2px rgba(147, 51, 234, 0.1);
+  }
+
+  .date-input {
+    color-scheme: dark;
+  }
+
+  .date-input::-webkit-calendar-picker-indicator {
+    filter: invert(1);
+    cursor: pointer;
+  }
+
+  .btn-clear-filters {
+    width: calc(100% - 3rem);
+    margin: 0 1.5rem 1.25rem 1.5rem;
+    padding: 0.875rem 1rem;
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    border-radius: 8px;
+    color: #ef4444;
+    font-weight: 500;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    white-space: nowrap;
+  }
+
+  .btn-clear-filters:hover {
+    background: rgba(239, 68, 68, 0.2);
+    border-color: rgba(239, 68, 68, 0.5);
+  }
+
+  :global(.filters) {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+
+  :global(.filter-btn) {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 0.875rem;
+    padding: 0.875rem 1rem;
+    background: rgba(255, 255, 255, 0.02);
+    border: none;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    border-left: 3px solid transparent;
+    border-radius: 0;
+    color: var(--text);
+    font-weight: 500;
+    font-size: 0.95rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-align: left;
+    padding-left: calc(1rem - 3px);
+  }
+
+  :global(.filter-btn:first-child) {
+    border-radius: 8px 8px 0 0;
+  }
+
+  :global(.filter-btn:last-child) {
+    border-bottom: none;
+    border-radius: 0 0 8px 8px;
+  }
+
+  :global(.filter-btn:first-child:last-child) {
+    border-radius: 8px;
+  }
+
+  :global(.filter-icon) {
+    font-size: 1.25rem;
+    flex-shrink: 0;
+    width: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  :global(.filter-text) {
+    flex: 1;
+  }
+
+  :global(.filter-btn:hover) {
+    background: rgba(147, 51, 234, 0.1);
+    color: var(--text);
+    border-left: 3px solid rgba(147, 51, 234, 0.5);
+  }
+
+  :global(.filter-btn.active) {
+    background: rgba(147, 51, 234, 0.15);
+    color: var(--primary);
+    font-weight: 600;
+    border-left: 3px solid var(--primary);
+  }
+
+  :global(.filter-btn.active .filter-icon) {
+    transform: scale(1.1);
+  }
+
+  .events-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    gap: 2rem;
+  }
+
+  :global(.event-card-wrapper) {
+    display: contents;
+  }
+
+  :global(.event-card) {
+    display: block;
+    text-decoration: none;
+    color: inherit;
+    background: rgba(37, 37, 64, 0.6);
+    backdrop-filter: blur(20px);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    overflow: hidden;
+    transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    cursor: pointer;
+    animation: fadeInUp 0.4s ease backwards;
+    position: relative;
+  }
+
+  :global(.event-card::before) {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      135deg,
+      rgba(147, 51, 234, 0.1),
+      rgba(217, 70, 239, 0.1)
+    );
+    opacity: 0;
+    transition: opacity 0.4s ease;
+    z-index: 0;
+  }
+
+  :global(.event-card:hover::before) {
+    opacity: 1;
+  }
+
+  :global(.event-card:hover) {
+    transform: translateY(-12px);
+    border-color: var(--primary);
+    box-shadow:
+      0 25px 50px rgba(147, 51, 234, 0.4),
+      0 0 0 1px rgba(147, 51, 234, 0.2);
+  }
+
+  :global(.event-image-wrapper) {
+    position: relative;
+    width: 100%;
+    height: 220px;
+    overflow: hidden;
+  }
+
+  :global(.event-image-wrapper::after) {
+    content: "";
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 60%;
+    background: linear-gradient(to top, rgba(2, 6, 23, 0.9), transparent);
+    z-index: 1;
+  }
+
+  :global(.event-image) {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    background: linear-gradient(135deg, var(--violet-900), var(--fuchsia-900));
+    transition: transform 0.4s ease;
+  }
+
+  :global(.event-card:hover .event-image) {
+    transform: scale(1.08);
+  }
+
+  :global(.event-content) {
+    padding: 1.75rem;
+    position: relative;
+    z-index: 1;
+  }
+
+  :global(.event-category) {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.4rem 1rem;
+    background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%);
+    border-radius: 16px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: white;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 1rem;
+    box-shadow: 0 4px 12px rgba(147, 51, 234, 0.3);
+  }
+
+  :global(.event-title) {
+    font-size: 1.35rem;
+    font-weight: 800;
+    color: var(--text);
+    margin-bottom: 1rem;
+    line-height: 1.3;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    letter-spacing: -0.02em;
+  }
+
+  :global(.event-description) {
+    font-size: 0.875rem;
+    color: var(--text-muted);
+    line-height: 1.5;
+    margin-top: 0.5rem;
+    margin-bottom: 1.25rem;
+    opacity: 0.8;
+  }
+
+  :global(.event-details) {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    margin-bottom: 1.25rem;
+  }
+
+  :global(.event-detail) {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    color: var(--text-muted);
+    font-size: 0.95rem;
+    font-weight: 500;
+  }
+
+  :global(.event-detail svg) {
+    width: 18px;
+    height: 18px;
+    color: var(--primary);
+    flex-shrink: 0;
+  }
+
+  :global(.event-address) {
+    font-size: 0.85rem;
+    opacity: 0.9;
+  }
+
+  :global(.event-address span) {
+    display: -webkit-box;
+    -webkit-line-clamp: 1;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  :global(.event-footer) {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-top: 1rem;
+    margin-top: 1rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+  }
+
+  :global(.price-tag) {
+    font-size: 1.5rem;
+    font-weight: 800;
+    background: linear-gradient(135deg, var(--primary), var(--accent));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    letter-spacing: -0.02em;
+  }
+
+  :global(.price-tag.free) {
+    background: linear-gradient(135deg, var(--emerald-500), var(--emerald-400));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  :global(.event-action) {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 42px;
+    height: 42px;
+    background: linear-gradient(135deg, var(--primary), var(--accent));
+    border-radius: 50%;
+    color: white;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 12px rgba(147, 51, 234, 0.3);
+  }
+
+  :global(.event-card:hover .event-action) {
+    transform: translateX(4px) scale(1.1);
+    box-shadow: 0 6px 20px rgba(147, 51, 234, 0.5);
+  }
+
+  :global(.event-actions-buttons) {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  :global(.btn-edit),
+  :global(.btn-delete) {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    border: none;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    text-decoration: none;
+  }
+
+  :global(.btn-edit) {
+    background: linear-gradient(135deg, var(--violet-600), var(--fuchsia-600));
+    color: white;
+    box-shadow: 0 4px 12px rgba(147, 51, 234, 0.3);
+  }
+
+  :global(.btn-edit:hover) {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(147, 51, 234, 0.5);
+  }
+
+  :global(.btn-delete) {
+    background: rgba(239, 68, 68, 0.1);
+    color: #ef4444;
+    border: 1px solid rgba(239, 68, 68, 0.3);
+  }
+
+  :global(.btn-delete:hover) {
+    background: rgba(239, 68, 68, 0.2);
+    border-color: rgba(239, 68, 68, 0.5);
+    transform: translateY(-2px);
+  }
+
+  :global(.event-featured) {
+    position: relative;
+  }
+
+  :global(.event-featured-badge) {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    background: linear-gradient(135deg, var(--orange-500), var(--orange-600));
+    border-radius: 16px;
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: white;
+    z-index: 2;
+    box-shadow: 0 4px 16px rgba(249, 115, 22, 0.4);
+    backdrop-filter: blur(8px);
+  }
+
+  @media (max-width: 768px) {
+    .container {
+      padding: 0 1rem;
+    }
+
+    .section-header h3 {
+      font-size: 1.5rem;
+    }
+
+    .search-filters-container {
+      margin-bottom: 1.5rem;
+    }
+
+    .search-bar-row {
+      flex-direction: column;
+      gap: 0.75rem;
+      align-items: stretch;
+    }
+
+    .sort-wrapper {
+      min-width: auto;
+      width: 100%;
+    }
+
+    .sort-label {
+      font-size: 0.8rem;
+    }
+
+    .search-input {
+      padding: 0.875rem 1rem 0.875rem 3.25rem;
+      font-size: 0.9rem;
+    }
+
+    .filters-wrapper {
+      grid-template-columns: 1fr;
+      gap: 1.5rem;
+    }
+
+    .filters-sidebar {
+      position: static;
+      max-height: none;
+    }
+
+    .btn-clear-filters {
+      width: calc(100% - 2rem);
+      margin: 0 1rem 1rem 1rem;
+      justify-content: center;
+    }
+
+    .price-range-inputs {
+      flex-direction: row;
+      padding: 0 1rem 0.75rem 1rem;
+    }
+
+    .price-input-separator {
+      padding-bottom: 0.5rem;
+      font-size: 0.9rem;
+    }
+
+    .events-grid {
+      grid-template-columns: 1fr;
+      gap: 1.5rem;
+    }
+
+    :global(.event-card) {
+      border-radius: 16px;
+    }
+
+    :global(.event-image-wrapper) {
+      height: 200px;
+    }
+
+    :global(.event-content) {
+      padding: 1.5rem;
+    }
+
+    :global(.event-title) {
+      font-size: 1.2rem;
+    }
+
+    :global(.filters) {
+      justify-content: center;
+    }
+  }
+</style>
+
+<script>
+  // Leaflet is loaded from CDN as a global variable
+  declare const L: any;
+
+  // Wait for Leaflet to be available
+  function waitForLeaflet(): Promise<void> {
+    return new Promise((resolve) => {
+      if (typeof L !== "undefined") {
+        resolve();
+      } else {
+        const checkInterval = setInterval(() => {
+          if (typeof L !== "undefined") {
+            clearInterval(checkInterval);
+            console.log("Leaflet loaded successfully");
+            resolve();
+          }
+        }, 100);
+
+        // Timeout after 5 seconds
+        setTimeout(() => {
+          clearInterval(checkInterval);
+          console.error("Leaflet failed to load");
+          resolve();
+        }, 5000);
+      }
+    });
+  }
+
+  // ===== Geolocation Utilities =====
+
+  /**
+   * Calculate distance between two coordinates using Haversine formula
+   */
+  function calculateDistance(
+    lat1: number,
+    lon1: number,
+    lat2: number,
+    lon2: number,
+  ): number {
+    const R = 6371; // Earth's radius in kilometers
+    const dLat = toRadians(lat2 - lat1);
+    const dLon = toRadians(lon2 - lon1);
+
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(toRadians(lat1)) *
+        Math.cos(toRadians(lat2)) *
+        Math.sin(dLon / 2) *
+        Math.sin(dLon / 2);
+
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    const distance = R * c;
+
+    return Math.round(distance * 10) / 10; // Round to 1 decimal
+  }
+
+  function toRadians(degrees: number): number {
+    return degrees * (Math.PI / 180);
+  }
+
+  async function getUserLocation(): Promise<{
+    latitude: number;
+    longitude: number;
+  } | null> {
+    return new Promise((resolve) => {
+      if (!navigator.geolocation) {
+        console.warn("Geolocation not supported");
+        alert("Tu navegador no soporta geolocalización");
+        resolve(null);
+        return;
+      }
+
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          resolve({
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude,
+          });
+        },
+        (error) => {
+          console.warn("Geolocation error:", error.message, error.code);
+
+          // Show user-friendly error messages
+          let errorMessage = "No se pudo obtener tu ubicación. ";
+
+          switch (error.code) {
+            case error.PERMISSION_DENIED:
+              errorMessage +=
+                "Has denegado el permiso de ubicación. Por favor, permite el acceso en la configuración de tu navegador.";
+              break;
+            case error.POSITION_UNAVAILABLE:
+              errorMessage += "La información de ubicación no está disponible.";
+              break;
+            case error.TIMEOUT:
+              errorMessage +=
+                "Se agotó el tiempo de espera para obtener tu ubicación.";
+              break;
+            default:
+              errorMessage += "Error desconocido.";
+          }
+
+          alert(errorMessage);
+          resolve(null);
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 300000, // 5 minutes
+        },
+      );
+    });
+  }
+
+  // ===== Logout Handler =====
+
+  const logoutForm = document.querySelector('form[action="/api/auth/logout"]');
+  logoutForm?.addEventListener("submit", async (e) => {
+    e.preventDefault();
+
+    try {
+      await fetch("/api/auth/logout", { method: "POST" });
+      window.location.href = "/login";
+    } catch (error) {
+      console.error("Logout error:", error);
+      window.location.href = "/login";
+    }
+  });
+
+  // Events functionality
+  async function loadCategories() {
+    try {
+      const response = await fetch("/api/events/categories");
+      const data = await response.json();
+
+      if (data.categories && data.categories.length > 0) {
+        const filtersContainer = document.getElementById("filters");
+
+        if (filtersContainer) {
+          // Mantener el botón "Todos" y agregar las categorías dinámicas
+          const categoryButtons = data.categories
+            .map((category: { id: string; name: string; icon: string }) => {
+              return `<button class="filter-btn" data-category="${category.id}">
+                <span class="filter-icon">${category.icon}</span>
+                <span class="filter-text">${category.name}</span>
+              </button>`;
+            })
+            .join("");
+
+          // Agregar los botones después del botón "Todos"
+          filtersContainer.innerHTML += categoryButtons;
+        }
+      }
+
+      // Marcar el botón de categoría activo basándose en la URL
+      const urlParams = new URLSearchParams(window.location.search);
+      const activeCategory = urlParams.get("category") || "all";
+
+      const categoryButtons = document.querySelectorAll(
+        ".filter-btn[data-category]",
+      );
+      categoryButtons.forEach((btn) => {
+        const btnCategory = (btn as HTMLElement).dataset.category || "all";
+        if (btnCategory === activeCategory) {
+          btn.classList.add("active");
+        } else {
+          btn.classList.remove("active");
+        }
+      });
+    } catch (error) {
+      console.error("Error loading categories:", error);
+    }
+
+    // Siempre configurar los event listeners, independientemente del resultado
+    setupFilterListeners();
+  }
+
+  function setupFilterListeners() {
+    const categoryButtons = document.querySelectorAll(
+      ".filter-btn[data-category]",
+    );
+    const priceButtons = document.querySelectorAll(".filter-btn[data-price]");
+
+    // Category filter buttons - cambiar categoría mediante URL
+    categoryButtons.forEach((button) => {
+      button.addEventListener("click", () => {
+        const category = (button as HTMLElement).dataset.category || "all";
+
+        // Construir nueva URL con parámetro de categoría
+        const url = new URL(window.location.href);
+        if (category === "all") {
+          url.searchParams.delete("category");
+        } else {
+          url.searchParams.set("category", category);
+        }
+
+        // Recargar página con nueva categoría
+        window.location.href = url.toString();
+      });
+    });
+
+    // Price filter buttons
+    priceButtons.forEach((button) => {
+      button.addEventListener("click", () => {
+        priceButtons.forEach((btn) => btn.classList.remove("active"));
+        button.classList.add("active");
+
+        const price = (button as HTMLElement).dataset.price || "all";
+        currentFilters.price = price;
+
+        // Limpiar inputs de precio personalizado
+        currentFilters.priceMin = "";
+        currentFilters.priceMax = "";
+        const priceMinInput = document.getElementById(
+          "price-min",
+        ) as HTMLInputElement;
+        const priceMaxInput = document.getElementById(
+          "price-max",
+        ) as HTMLInputElement;
+        if (priceMinInput) priceMinInput.value = "";
+        if (priceMaxInput) priceMaxInput.value = "";
+
+        applyFiltersAndRender();
+      });
+    });
+  }
+
+  // Variables globales para los filtros
+  let currentFilters = {
+    category: "all",
+    search: "",
+    dateFrom: "",
+    dateTo: "",
+    price: "all",
+    priceMin: "",
+    priceMax: "",
+    sort: "date-asc",
+    userLocation: null as { latitude: number; longitude: number } | null,
+    distanceKm: 10,
+  };
+
+  function applyFiltersAndRender() {
+    const eventsGrid = document.getElementById("events-grid");
+    const emptyState = document.getElementById("events-empty");
+
+    if (!eventsGrid) return;
+
+    const allCardWrappers = eventsGrid.querySelectorAll(
+      ".event-card-wrapper",
+    ) as NodeListOf<HTMLElement>;
+    let visibleCount = 0;
+
+    allCardWrappers.forEach((wrapper) => {
+      let isVisible = true;
+
+      // Filtro de búsqueda
+      if (currentFilters.search) {
+        const searchLower = currentFilters.search.toLowerCase();
+        const title = wrapper.dataset.title || "";
+        const description = wrapper.dataset.description || "";
+        const category = wrapper.dataset.category || "";
+        const city = wrapper.dataset.city || "";
+        const locationName = wrapper.dataset.locationName || "";
+
+        isVisible =
+          isVisible &&
+          (title.includes(searchLower) ||
+            description.includes(searchLower) ||
+            category.includes(searchLower) ||
+            city.includes(searchLower) ||
+            locationName.includes(searchLower));
+      }
+
+      // Filtro de fecha por rango
+      if (currentFilters.dateFrom || currentFilters.dateTo) {
+        const eventDate = wrapper.dataset.startDate || "";
+        const eventDateOnly = eventDate.split("T")[0];
+
+        if (currentFilters.dateFrom) {
+          isVisible = isVisible && eventDateOnly >= currentFilters.dateFrom;
+        }
+
+        if (currentFilters.dateTo) {
+          isVisible = isVisible && eventDateOnly <= currentFilters.dateTo;
+        }
+      }
+
+      // Filtro de precio
+      const price = parseFloat(wrapper.dataset.price || "0");
+      const isFree = wrapper.dataset.isFree === "true";
+
+      if (
+        currentFilters.price === "custom" &&
+        (currentFilters.priceMin || currentFilters.priceMax)
+      ) {
+        const min = currentFilters.priceMin
+          ? parseFloat(currentFilters.priceMin)
+          : 0;
+        const max = currentFilters.priceMax
+          ? parseFloat(currentFilters.priceMax)
+          : Infinity;
+
+        if (isFree) {
+          isVisible = isVisible && min === 0;
+        } else {
+          isVisible = isVisible && price >= min && price <= max;
+        }
+      } else if (currentFilters.price !== "all") {
+        switch (currentFilters.price) {
+          case "free":
+            isVisible = isVisible && isFree;
+            break;
+          case "paid":
+            isVisible = isVisible && !isFree;
+            break;
+          case "0-50000":
+            isVisible = isVisible && price >= 0 && price <= 50000;
+            break;
+          case "50000-100000":
+            isVisible = isVisible && price > 50000 && price <= 100000;
+            break;
+          case "100000+":
+            isVisible = isVisible && price > 100000;
+            break;
+        }
+      }
+
+      // Filtro de ubicación
+      if (currentFilters.userLocation && currentFilters.distanceKm) {
+        const lat = wrapper.dataset.latitude;
+        const lon = wrapper.dataset.longitude;
+
+        if (lat && lon) {
+          const distance = calculateDistance(
+            currentFilters.userLocation.latitude,
+            currentFilters.userLocation.longitude,
+            parseFloat(lat),
+            parseFloat(lon),
+          );
+          isVisible = isVisible && distance <= currentFilters.distanceKm;
+        }
+      }
+
+      // Aplicar visibilidad
+      wrapper.style.display = isVisible ? "" : "none";
+      if (isVisible) visibleCount++;
+    });
+
+    // Ordenar elementos visibles
+    const sortedWrappers = Array.from(allCardWrappers)
+      .filter((w) => w.style.display !== "none")
+      .sort((a, b) => {
+        switch (currentFilters.sort) {
+          case "date-asc":
+            return (a.dataset.startDate || "").localeCompare(
+              b.dataset.startDate || "",
+            );
+          case "date-desc":
+            return (b.dataset.startDate || "").localeCompare(
+              a.dataset.startDate || "",
+            );
+          case "price-asc":
+            return (
+              parseFloat(a.dataset.price || "0") -
+              parseFloat(b.dataset.price || "0")
+            );
+          case "price-desc":
+            return (
+              parseFloat(b.dataset.price || "0") -
+              parseFloat(a.dataset.price || "0")
+            );
+          case "name":
+            return (a.dataset.title || "").localeCompare(b.dataset.title || "");
+          default:
+            return 0;
+        }
+      });
+
+    // Reordenar en el DOM
+    sortedWrappers.forEach((wrapper) => eventsGrid.appendChild(wrapper));
+
+    // Mostrar/ocultar empty state
+    if (emptyState) {
+      emptyState.style.display = visibleCount === 0 ? "flex" : "none";
+    }
+
+    if (visibleCount === 0) {
+      eventsGrid.style.display = "none";
+    } else {
+      eventsGrid.style.display = "grid";
+    }
+  }
+
+  document.addEventListener("DOMContentLoaded", async () => {
+    // Cargar categorías
+    await loadCategories();
+
+    // Configurar listeners
+    setupFilterListeners();
+
+    // Aplicar filtros iniciales (todos los eventos ya están renderados)
+    applyFiltersAndRender();
+
+    // Event listeners para filtros
+    const searchInput = document.getElementById(
+      "search-input",
+    ) as HTMLInputElement;
+    const dateFromInput = document.getElementById(
+      "date-from",
+    ) as HTMLInputElement;
+    const dateToInput = document.getElementById("date-to") as HTMLInputElement;
+    const priceMinInput = document.getElementById(
+      "price-min",
+    ) as HTMLInputElement;
+    const priceMaxInput = document.getElementById(
+      "price-max",
+    ) as HTMLInputElement;
+    const sortFilter = document.getElementById(
+      "sort-filter",
+    ) as HTMLSelectElement;
+
+    // Location filter handlers
+    const locationBtn = document.getElementById("get-user-location");
+    const searchLocationInput = document.getElementById(
+      "location-search-input",
+    ) as HTMLInputElement;
+    const searchLocationBtn = document.getElementById("search-location-btn");
+    const distanceSelector = document.getElementById("distance-selector");
+    const distanceRange = document.getElementById(
+      "distance-range",
+    ) as HTMLInputElement;
+    const distanceValue = document.getElementById("distance-value");
+    const locationStatus = document.getElementById("location-status");
+    const locationInfo = document.getElementById("location-info");
+    const mapContainer = document.getElementById("location-map");
+
+    // Map variables
+    let locationMap: any = null;
+    let userMarker: any = null;
+    let radiusCircle: any = null;
+    let priceTimeout: any = null;
+
+    // Initialize map with user location
+    function initializeLocationMap(lat: number, lng: number, radiusKm: number) {
+      console.log("Initializing map with:", lat, lng, radiusKm);
+      console.log("Map container:", mapContainer);
+      console.log("Leaflet L object:", typeof L);
+
+      if (!mapContainer) {
+        console.error("Map container not found!");
+        return;
+      }
+
+      // Show map container
+      mapContainer.style.display = "block";
+
+      // Create map if not exists
+      if (!locationMap) {
+        console.log("Creating new map...");
+        try {
+          locationMap = L.map("location-map").setView([lat, lng], 12);
+          console.log("Map created:", locationMap);
+        } catch (error) {
+          console.error("Error creating map:", error);
+          return;
+        }
+
+        // Add OpenStreetMap tiles
+        L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+          attribution: "© OpenStreetMap contributors",
+          maxZoom: 19,
+        }).addTo(locationMap);
+
+        // Fix Leaflet default icon paths
+        delete (L.Icon.Default.prototype as any)._getIconUrl;
+        L.Icon.Default.mergeOptions({
+          iconRetinaUrl:
+            "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
+          iconUrl:
+            "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
+          shadowUrl:
+            "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
+        });
+
+        // Make map clickeable to set custom location
+        locationMap.on("click", (e: any) => {
+          const { lat, lng } = e.latlng;
+          console.log("Map clicked at:", lat, lng);
+
+          // Update marker position
+          if (userMarker) {
+            userMarker.setLatLng([lat, lng]);
+          } else {
+            userMarker = L.marker([lat, lng]).addTo(locationMap);
+          }
+          userMarker.bindPopup("📍 Ubicación seleccionada").openPopup();
+
+          // Update radius circle
+          if (radiusCircle) {
+            radiusCircle.setLatLng([lat, lng]);
+          } else {
+            radiusCircle = L.circle([lat, lng], {
+              color: "#9333ea",
+              fillColor: "#9333ea",
+              fillOpacity: 0.15,
+              radius: currentFilters.distanceKm * 1000,
+            }).addTo(locationMap);
+          }
+
+          // Update filters and apply
+          currentFilters.userLocation = { latitude: lat, longitude: lng };
+          if (locationInfo) locationInfo.style.display = "block";
+          applyFiltersAndRender();
+        });
+      }
+
+      // Add or update user marker
+      if (userMarker) {
+        userMarker.setLatLng([lat, lng]);
+      } else {
+        userMarker = L.marker([lat, lng]).addTo(locationMap);
+        userMarker.bindPopup("Tu ubicación").openPopup();
+      }
+
+      // Add or update radius circle
+      if (radiusCircle) {
+        radiusCircle.setLatLng([lat, lng]);
+        radiusCircle.setRadius(radiusKm * 1000); // Convert km to meters
+      } else {
+        radiusCircle = L.circle([lat, lng], {
+          color: "#9333ea",
+          fillColor: "#9333ea",
+          fillOpacity: 0.15,
+          radius: radiusKm * 1000, // Convert km to meters
+        }).addTo(locationMap);
+      }
+
+      // Fit map to circle bounds with some padding
+      locationMap.fitBounds(radiusCircle.getBounds(), { padding: [20, 20] });
+
+      // Invalidate size to fix rendering issues
+      setTimeout(() => {
+        console.log("Invalidating map size...");
+        locationMap?.invalidateSize();
+      }, 100);
+    }
+
+    // Search location by address
+    async function searchLocationByAddress(query: string) {
+      if (!query.trim()) {
+        alert("Por favor ingresa una ubicación para buscar");
+        return null;
+      }
+
+      try {
+        const response = await fetch(
+          `https://nominatim.openstreetmap.org/search?` +
+            `q=${encodeURIComponent(query)}&` +
+            `format=json&` +
+            `countrycodes=co&` +
+            `addressdetails=1&` +
+            `limit=1`,
+          {
+            headers: {
+              "User-Agent": "EventHub-Location-Search",
+            },
+          },
+        );
+
+        if (!response.ok) {
+          throw new Error("Error en la búsqueda");
+        }
+
+        const results = await response.json();
+
+        if (results && results.length > 0) {
+          const result = results[0];
+          return {
+            latitude: parseFloat(result.lat),
+            longitude: parseFloat(result.lon),
+            displayName: result.display_name,
+          };
+        } else {
+          return null;
+        }
+      } catch (error) {
+        console.error("Error searching location:", error);
+        return null;
+      }
+    }
+
+    // Search location button handler
+    if (searchLocationBtn && searchLocationInput) {
+      searchLocationBtn.addEventListener("click", async () => {
+        const query = searchLocationInput.value.trim();
+
+        if (!query) {
+          alert("Por favor ingresa una ciudad, dirección o lugar para buscar");
+          return;
+        }
+
+        searchLocationBtn.setAttribute("disabled", "true");
+        searchLocationBtn.innerHTML = `
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" class="spinner">
+            <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" fill="none" opacity="0.25"/>
+            <path d="M12 2 A10 10 0 0 1 22 12" stroke="currentColor" stroke-width="2" fill="none"/>
+          </svg>
+          Buscando...
+        `;
+
+        // Wait for Leaflet to be loaded
+        await waitForLeaflet();
+
+        const location = await searchLocationByAddress(query);
+
+        if (location) {
+          currentFilters.userLocation = {
+            latitude: location.latitude,
+            longitude: location.longitude,
+          };
+          currentFilters.distanceKm = parseInt(distanceRange.value) || 10;
+
+          if (distanceSelector) distanceSelector.style.display = "block";
+          if (locationInfo) {
+            locationInfo.style.display = "block";
+            const infoText = locationInfo.querySelector(".info-text");
+            if (infoText) {
+              infoText.innerHTML = `
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                  <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/>
+                  <path d="M12 16v-4m0-4h.01" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                </svg>
+                Buscando cerca de: ${location.displayName.split(",").slice(0, 2).join(",")}
+              `;
+            }
+          }
+
+          // Initialize map with searched location
+          initializeLocationMap(
+            location.latitude,
+            location.longitude,
+            currentFilters.distanceKm,
+          );
+
+          applyFiltersAndRender();
+
+          searchLocationBtn.removeAttribute("disabled");
+          searchLocationBtn.innerHTML = `
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+              <circle cx="11" cy="11" r="8" stroke="currentColor" stroke-width="2"/>
+              <path d="m21 21-4.35-4.35" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+            Buscar
+          `;
+        } else {
+          alert(
+            `No se encontró la ubicación "${query}". Intenta con otra búsqueda más específica.`,
+          );
+          searchLocationBtn.removeAttribute("disabled");
+          searchLocationBtn.innerHTML = `
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+              <circle cx="11" cy="11" r="8" stroke="currentColor" stroke-width="2"/>
+              <path d="m21 21-4.35-4.35" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+            Buscar
+          `;
+        }
+      });
+
+      // Allow Enter key to search
+      searchLocationInput.addEventListener("keypress", (e) => {
+        if (e.key === "Enter") {
+          searchLocationBtn.click();
+        }
+      });
+    }
+
+    if (locationBtn && distanceRange) {
+      locationBtn.addEventListener("click", async () => {
+        locationBtn.setAttribute("disabled", "true");
+        if (locationStatus)
+          locationStatus.textContent = "Obteniendo ubicación...";
+
+        // Wait for Leaflet to be loaded
+        await waitForLeaflet();
+
+        // Check if Leaflet is loaded
+        if (typeof L === "undefined") {
+          console.error("Leaflet failed to load!");
+          if (locationStatus)
+            locationStatus.textContent = "Error: Mapa no disponible";
+          setTimeout(() => {
+            locationBtn.removeAttribute("disabled");
+            if (locationStatus)
+              locationStatus.textContent = "Usar mi ubicación";
+          }, 3000);
+          return;
+        }
+
+        const location = await getUserLocation();
+        console.log("User location:", location);
+
+        if (location) {
+          currentFilters.userLocation = location;
+          currentFilters.distanceKm = parseInt(distanceRange.value) || 10;
+
+          if (locationStatus)
+            locationStatus.textContent = "Ubicación activada ✓";
+          if (distanceSelector) distanceSelector.style.display = "block";
+          if (locationInfo) {
+            locationInfo.style.display = "block";
+            const infoText = locationInfo.querySelector(".info-text");
+            if (infoText) {
+              infoText.innerHTML = `
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                  <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/>
+                  <path d="M12 16v-4m0-4h.01" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                </svg>
+                Mostrando eventos cerca de tu ubicación actual
+              `;
+            }
+          }
+
+          // Initialize map with user location and distance radius
+          console.log("About to initialize map...");
+          initializeLocationMap(
+            location.latitude,
+            location.longitude,
+            currentFilters.distanceKm,
+          );
+
+          applyFiltersAndRender();
+        } else {
+          // Reset button immediately after error
+          locationBtn.removeAttribute("disabled");
+          if (locationStatus) locationStatus.textContent = "Usar mi ubicación";
+        }
+      });
+
+      distanceRange.addEventListener("input", () => {
+        if (distanceValue) {
+          distanceValue.textContent = distanceRange.value;
+        }
+
+        if (currentFilters.userLocation) {
+          currentFilters.distanceKm = parseInt(distanceRange.value) || 10;
+
+          // Update circle radius on map
+          if (radiusCircle) {
+            radiusCircle.setRadius(currentFilters.distanceKm * 1000);
+            if (locationMap) {
+              locationMap.fitBounds(radiusCircle.getBounds(), {
+                padding: [20, 20],
+              });
+            }
+          }
+
+          applyFiltersAndRender();
+        }
+      });
+    }
+
+    const clearFiltersBtn = document.getElementById("clear-filters");
+
+    // Búsqueda con debounce
+    let searchTimeout: NodeJS.Timeout;
+    searchInput?.addEventListener("input", (e) => {
+      clearTimeout(searchTimeout);
+      searchTimeout = setTimeout(() => {
+        currentFilters.search = (e.target as HTMLInputElement).value;
+        applyFiltersAndRender();
+      }, 300);
+    });
+
+    // Campos de rango de fechas
+    dateFromInput?.addEventListener("change", (e) => {
+      currentFilters.dateFrom = (e.target as HTMLInputElement).value;
+      applyFiltersAndRender();
+    });
+
+    dateToInput?.addEventListener("change", (e) => {
+      currentFilters.dateTo = (e.target as HTMLInputElement).value;
+      applyFiltersAndRender();
+    });
+
+    priceMinInput?.addEventListener("input", (e) => {
+      clearTimeout(priceTimeout);
+      priceTimeout = setTimeout(() => {
+        const minValue = (e.target as HTMLInputElement).value;
+        currentFilters.priceMin = minValue;
+
+        // Desactivar botones de precio si hay valor
+        if (minValue || currentFilters.priceMax) {
+          const priceBtns = document.querySelectorAll(
+            ".filter-btn[data-price]",
+          );
+          priceBtns.forEach((btn) => btn.classList.remove("active"));
+          currentFilters.price = "custom";
+        }
+
+        applyFiltersAndRender();
+      }, 500);
+    });
+
+    priceMaxInput?.addEventListener("input", (e) => {
+      clearTimeout(priceTimeout);
+      priceTimeout = setTimeout(() => {
+        const maxValue = (e.target as HTMLInputElement).value;
+        currentFilters.priceMax = maxValue;
+
+        // Desactivar botones de precio si hay valor
+        if (maxValue || currentFilters.priceMin) {
+          const priceBtns = document.querySelectorAll(
+            ".filter-btn[data-price]",
+          );
+          priceBtns.forEach((btn) => btn.classList.remove("active"));
+          currentFilters.price = "custom";
+        }
+
+        applyFiltersAndRender();
+      }, 500);
+    });
+
+    // Ordenar
+    sortFilter?.addEventListener("change", (e) => {
+      currentFilters.sort = (e.target as HTMLSelectElement).value;
+      applyFiltersAndRender();
+    });
+
+    // Limpiar filtros
+    clearFiltersBtn?.addEventListener("click", () => {
+      currentFilters = {
+        category: "all",
+        search: "",
+        dateFrom: "",
+        dateTo: "",
+        price: "all",
+        priceMin: "",
+        priceMax: "",
+        sort: "date-asc",
+        userLocation: null,
+        distanceKm: 10,
+      };
+
+      // Reset inputs
+      if (searchInput) searchInput.value = "";
+      if (dateFromInput) dateFromInput.value = "";
+      if (dateToInput) dateToInput.value = "";
+      if (priceMinInput) priceMinInput.value = "";
+      if (priceMaxInput) priceMaxInput.value = "";
+      if (sortFilter) sortFilter.value = "date-asc";
+
+      // Reset location filter
+      if (searchLocationInput) searchLocationInput.value = "";
+      if (locationBtn) locationBtn.removeAttribute("disabled");
+      if (locationStatus) locationStatus.textContent = "Usar mi ubicación";
+      if (distanceSelector) distanceSelector.style.display = "none";
+      if (locationInfo) locationInfo.style.display = "none";
+      if (distanceRange) distanceRange.value = "10";
+      if (distanceValue) distanceValue.textContent = "10";
+
+      // Hide and reset map
+      if (mapContainer) mapContainer.style.display = "none";
+      if (locationMap) {
+        locationMap.remove();
+        locationMap = null;
+        userMarker = null;
+        radiusCircle = null;
+      }
+
+      // Reset filter buttons
+      const categoryBtns = document.querySelectorAll(
+        ".filter-btn[data-category]",
+      );
+      categoryBtns.forEach((btn) => {
+        if (btn.getAttribute("data-category") === "all") {
+          btn.classList.add("active");
+        } else {
+          btn.classList.remove("active");
+        }
+      });
+
+      const priceBtns = document.querySelectorAll(".filter-btn[data-price]");
+      priceBtns.forEach((btn) => {
+        if (btn.getAttribute("data-price") === "all") {
+          btn.classList.add("active");
+        } else {
+          btn.classList.remove("active");
+        }
+      });
+
+      // Recargar página sin query params
+      window.location.href = window.location.pathname;
+    });
+  });
+</script>

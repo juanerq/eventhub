@@ -1,0 +1,252 @@
+---
+/**
+ * ImageGalleryPreview - Componente para visualizar previews de imágenes en grilla
+ * Muestra imágenes en tamaños uniformes con opción de eliminar
+ * @param id - ID único para el contenedor (requerido)
+ * @param maxImages - Número máximo de imágenes permitidas (default: 10)
+ * @param imageSize - Tamaño de cada imagen en px (default: 150)
+ * @param imageSizeMobile - Tamaño de cada imagen en mobile en px (default: 120)
+ */
+
+interface Props {
+  id: string;
+  maxImages?: number;
+  imageSize?: number;
+  imageSizeMobile?: number;
+}
+
+const { 
+  id, 
+  maxImages = 10, 
+  imageSize = 150,
+  imageSizeMobile = 120 
+} = Astro.props;
+---
+
+<div id={id} class="images-gallery">
+  <!-- Las imágenes se agregarán dinámicamente aquí -->
+</div>
+
+<style define:vars={{ imageSize: `${imageSize}px`, imageSizeMobile: `${imageSizeMobile}px` }}>
+  .images-gallery {
+    display: contents; /* Se integra en el flex del padre */
+  }
+  
+  .images-gallery:empty {
+    display: none;
+  }
+
+  /* Estilos para las imágenes nuevas - usar :global sin descendiente */
+  :global(.image-item-new) {
+    position: relative;
+    width: var(--imageSize);
+    height: var(--imageSize);
+    min-width: var(--imageSize);
+    min-height: var(--imageSize);
+    max-width: var(--imageSize);
+    max-height: var(--imageSize);
+    border-radius: 12px;
+    overflow: hidden;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+
+  :global(.image-item-new img) {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+
+  :global(.image-item-new .btn-remove-image) {
+    position: absolute;
+    top: 0.5rem;
+    right: 0.5rem;
+    width: 32px;
+    height: 32px;
+    background: rgba(0, 0, 0, 0.85);
+    border: 2px solid white;
+    border-radius: 50%;
+    color: white;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: all 0.2s ease;
+    z-index: 10;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  }
+
+  :global(.image-item-new:hover .btn-remove-image) {
+    opacity: 1;
+  }
+
+  :global(.image-item-new .btn-remove-image:hover) {
+    background: #e74c3c;
+    transform: scale(1.1);
+  }
+
+  @media (max-width: 768px) {
+    :global(.image-item-new) {
+      width: var(--imageSizeMobile);
+      height: var(--imageSizeMobile);
+      min-width: var(--imageSizeMobile);
+      min-height: var(--imageSizeMobile);
+      max-width: var(--imageSizeMobile);
+      max-height: var(--imageSizeMobile);
+    }
+  }
+</style>
+
+<script>
+  /**
+   * Clase para manejar la galería de imágenes
+   */
+  class ImageGalleryPreview {
+    private container: HTMLElement;
+    private images: Map<number, File>;
+    private maxImages: number;
+    private onChangeCallback?: (files: File[]) => void;
+
+    constructor(containerId: string, maxImages: number = 10) {
+      const element = document.getElementById(containerId);
+      if (!element) {
+        throw new Error(`Container with id "${containerId}" not found`);
+      }
+      this.container = element;
+      this.images = new Map();
+      this.maxImages = maxImages;
+    }
+
+    /**
+     * Agregar imágenes a la galería
+     */
+    public addImages(files: File[]): boolean {
+      const currentCount = this.images.size;
+      const newCount = files.length;
+
+      if (currentCount + newCount > this.maxImages) {
+        return false; // Excede el límite
+      }
+
+      files.forEach((file, index) => {
+        const fileIndex = currentCount + index;
+        this.images.set(fileIndex, file);
+        this.renderImage(file, fileIndex);
+      });
+
+      this.show();
+      this.triggerChange();
+      return true;
+    }
+
+    /**
+     * Renderizar una imagen en el DOM
+     */
+    private renderImage(file: File, index: number): void {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const imageItem = document.createElement("div");
+        imageItem.className = "image-item image-item-new";
+        imageItem.dataset.fileIndex = String(index);
+        imageItem.innerHTML = `
+          <img src="${e.target?.result}" alt="Imagen ${index + 1}" />
+          <button type="button" class="btn-remove-image" data-file-index="${index}">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+              <path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path>
+            </svg>
+          </button>
+        `;
+
+        // Agregar evento de eliminar
+        const removeBtn = imageItem.querySelector(".btn-remove-image");
+        removeBtn?.addEventListener("click", () => {
+          this.removeImage(index);
+        });
+
+        this.container.appendChild(imageItem);
+      };
+      reader.readAsDataURL(file);
+    }
+
+    /**
+     * Eliminar una imagen
+     */
+    private removeImage(index: number): void {
+      // Eliminar del Map
+      this.images.delete(index);
+
+      // Eliminar del DOM
+      const imageItem = this.container.querySelector(
+        `[data-file-index="${index}"]`
+      );
+      imageItem?.remove();
+
+      // Ocultar si no hay imágenes
+      if (this.images.size === 0) {
+        this.hide();
+      }
+
+      this.triggerChange();
+    }
+
+    /**
+     * Obtener todas las imágenes como array
+     */
+    public getFiles(): File[] {
+      return Array.from(this.images.values());
+    }
+
+    /**
+     * Obtener cantidad de imágenes
+     */
+    public getCount(): number {
+      return this.images.size;
+    }
+
+    /**
+     * Limpiar todas las imágenes
+     */
+    public clear(): void {
+      this.images.clear();
+      this.container.innerHTML = "";
+      this.hide();
+      this.triggerChange();
+    }
+
+    /**
+     * Mostrar el contenedor
+     */
+    private show(): void {
+      // No hacer nada - display: contents siempre visible
+    }
+
+    /**
+     * Ocultar el contenedor
+     */
+    private hide(): void {
+      // No hacer nada - display: contents siempre visible
+    }
+
+    /**
+     * Registrar callback para cambios
+     */
+    public onChange(callback: (files: File[]) => void): void {
+      this.onChangeCallback = callback;
+    }
+
+    /**
+     * Disparar evento de cambio
+     */
+    private triggerChange(): void {
+      if (this.onChangeCallback) {
+        this.onChangeCallback(this.getFiles());
+      }
+    }
+  }
+
+  // Exportar la clase globalmente para que esté disponible en otros scripts
+  (window as any).ImageGalleryPreview = ImageGalleryPreview;
+</script>

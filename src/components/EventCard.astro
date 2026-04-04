@@ -1,0 +1,482 @@
+---
+interface Props {
+  event: {
+    id: string;
+    title: string;
+    description?: string;
+    start_date: string;
+    city: string;
+    country: string;
+    address?: string;
+    price: number;
+    is_free: boolean;
+    is_featured?: boolean;
+    image_url?: string;
+    category: string;
+  };
+  variant?: "explore" | "my-events";
+  index?: number;
+}
+
+const { event, variant = "explore", index = 0 } = Astro.props;
+
+// Truncar descripción
+const truncatedDescription = event.description
+  ? event.description.length > 100
+    ? event.description.substring(0, 100) + "..."
+    : event.description
+  : null;
+
+// Formatear fecha
+const startDate = new Date(event.start_date);
+const formattedDate = startDate.toLocaleDateString("es-ES", {
+  weekday: "short",
+  day: "numeric",
+  month: "short",
+  hour: "2-digit",
+  minute: "2-digit",
+});
+
+// Iconos por categoría
+const categoryIcons: Record<string, string> = {
+  concert: "🎵",
+  party: "🎉",
+  sports: "⚽",
+  workshop: "🎓",
+  networking: "🤝",
+  conference: "🎤",
+  exhibition: "🎨",
+  theater: "🎭",
+  other: "📅",
+};
+
+const categoryIcon = categoryIcons[event.category] || "📅";
+const imageUrl =
+  event.image_url || "https://via.placeholder.com/400x220?text=Evento";
+const isFeatured = variant === "explore" && event.is_featured;
+
+// Elemento raíz: <a> para explore, <div> para my-events
+const RootElement = variant === "explore" ? "a" : "div";
+const rootProps = variant === "explore" ? { href: `/event/${event.id}` } : {};
+---
+
+<RootElement
+  {...rootProps}
+  class:list={["event-card", { "event-featured": isFeatured }]}
+  style={`animation-delay: ${index * 0.1}s`}
+>
+  {
+    isFeatured && (
+      <div class="event-featured-badge">
+        <span>⭐</span>
+        <span>Destacado</span>
+      </div>
+    )
+  }
+
+  <div class="event-image-wrapper">
+    <img
+      src={imageUrl}
+      alt={event.title}
+      class="event-image"
+      onerror="this.src='https://via.placeholder.com/400x220?text=Evento'"
+    />
+  </div>
+
+  <div class="event-content">
+    <span class="event-category">
+      <span>{categoryIcon}</span>
+      <span>{event.category}</span>
+    </span>
+
+    <h4 class="event-title">{event.title}</h4>
+
+    {
+      truncatedDescription && (
+        <p class="event-description">{truncatedDescription}</p>
+      )
+    }
+
+    <div class="event-details">
+      <div class="event-detail">
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+        >
+          <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+          <line x1="16" y1="2" x2="16" y2="6"></line>
+          <line x1="8" y1="2" x2="8" y2="6"></line>
+          <line x1="3" y1="10" x2="21" y2="10"></line>
+        </svg>
+        <span>{formattedDate}</span>
+      </div>
+
+      <div class="event-detail">
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+        >
+          <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+          <circle cx="12" cy="10" r="3"></circle>
+        </svg>
+        <span>{event.city}, {event.country}</span>
+      </div>
+
+      {
+        event.address && (
+          <div class="event-detail event-address">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+            >
+              <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" />
+              <circle cx="12" cy="9" r="2.5" fill="none" />
+            </svg>
+            <span>{event.address}</span>
+          </div>
+        )
+      }
+    </div>
+
+    <div class="event-footer">
+      <span class:list={["price-tag", { free: event.is_free }]}>
+        {event.is_free ? "Gratis" : `$${event.price.toLocaleString()}`}
+      </span>
+
+      {
+        variant === "explore" && (
+          <div class="event-action">
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2.5"
+              stroke-linecap="round"
+            >
+              <path d="M5 12h14M12 5l7 7-7 7" />
+            </svg>
+          </div>
+        )
+      }
+
+      {
+        variant === "my-events" && (
+          <div class="event-actions-buttons">
+            <a
+              href={`/edit-event/${event.id}`}
+              class="btn-edit"
+              title="Editar evento"
+            >
+              <svg
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+              </svg>
+            </a>
+            <button
+              class="btn-delete"
+              data-event-id={event.id}
+              title="Eliminar evento"
+            >
+              <svg
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <polyline points="3 6 5 6 21 6" />
+                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                <line x1="10" y1="11" x2="10" y2="17" />
+                <line x1="14" y1="11" x2="14" y2="17" />
+              </svg>
+            </button>
+          </div>
+        )
+      }
+    </div>
+  </div>
+</RootElement>
+
+<style>
+  .event-card {
+    display: block;
+    text-decoration: none;
+    color: inherit;
+    background: rgba(37, 37, 64, 0.6);
+    backdrop-filter: blur(20px);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    overflow: hidden;
+    transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    cursor: pointer;
+    animation: fadeInUp 0.4s ease backwards;
+    position: relative;
+  }
+
+  .event-card::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      135deg,
+      rgba(147, 51, 234, 0.1),
+      rgba(217, 70, 239, 0.1)
+    );
+    opacity: 0;
+    transition: opacity 0.4s ease;
+    z-index: 0;
+  }
+
+  .event-card:hover::before {
+    opacity: 1;
+  }
+
+  .event-card:hover {
+    transform: translateY(-12px);
+    border-color: var(--primary);
+    box-shadow:
+      0 25px 50px rgba(147, 51, 234, 0.4),
+      0 0 0 1px rgba(147, 51, 234, 0.2);
+  }
+
+  .event-image-wrapper {
+    position: relative;
+    width: 100%;
+    height: 220px;
+    overflow: hidden;
+  }
+
+  .event-image-wrapper::after {
+    content: "";
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 60%;
+    background: linear-gradient(to top, rgba(2, 6, 23, 0.9), transparent);
+    z-index: 1;
+  }
+
+  .event-image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    background: linear-gradient(135deg, var(--violet-900), var(--fuchsia-900));
+    transition: transform 0.4s ease;
+  }
+
+  .event-card:hover .event-image {
+    transform: scale(1.08);
+  }
+
+  .event-content {
+    padding: 1.75rem;
+    position: relative;
+    z-index: 1;
+  }
+
+  .event-category {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.4rem 1rem;
+    background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%);
+    border-radius: 16px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: white;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 1rem;
+    box-shadow: 0 4px 12px rgba(147, 51, 234, 0.3);
+  }
+
+  .event-title {
+    font-size: 1.35rem;
+    font-weight: 800;
+    color: var(--text);
+    margin-bottom: 0.75rem;
+    line-height: 1.3;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    letter-spacing: -0.02em;
+  }
+
+  .event-description {
+    font-size: 0.875rem;
+    color: var(--text-muted);
+    line-height: 1.5;
+    margin-top: 0.5rem;
+    margin-bottom: 1.25rem;
+    opacity: 0.8;
+  }
+
+  .event-details {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    margin-bottom: 1.25rem;
+  }
+
+  .event-detail {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    color: var(--text-muted);
+    font-size: 0.95rem;
+    font-weight: 500;
+  }
+
+  .event-detail svg {
+    width: 18px;
+    height: 18px;
+    color: var(--primary);
+    flex-shrink: 0;
+  }
+
+  .event-address {
+    font-size: 0.85rem;
+    opacity: 0.9;
+  }
+
+  .event-address span {
+    display: -webkit-box;
+    -webkit-line-clamp: 1;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .event-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-top: 1rem;
+    margin-top: 1rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+  }
+
+  .price-tag {
+    font-size: 1.5rem;
+    font-weight: 800;
+    background: linear-gradient(135deg, var(--primary), var(--accent));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    letter-spacing: -0.02em;
+  }
+
+  .price-tag.free {
+    background: linear-gradient(135deg, var(--emerald-500), var(--emerald-400));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .event-action {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 42px;
+    height: 42px;
+    background: linear-gradient(135deg, var(--primary), var(--accent));
+    border-radius: 50%;
+    color: white;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 12px rgba(147, 51, 234, 0.3);
+  }
+
+  .event-card:hover .event-action {
+    transform: translateX(4px) scale(1.1);
+    box-shadow: 0 6px 20px rgba(147, 51, 234, 0.5);
+  }
+
+  .event-actions-buttons {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .btn-edit,
+  .btn-delete {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    border: none;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    text-decoration: none;
+  }
+
+  .btn-edit {
+    background: linear-gradient(135deg, var(--violet-600), var(--fuchsia-600));
+    color: white;
+    box-shadow: 0 4px 12px rgba(147, 51, 234, 0.3);
+  }
+
+  .btn-edit:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(147, 51, 234, 0.5);
+  }
+
+  .btn-delete {
+    background: rgba(239, 68, 68, 0.1);
+    color: #ef4444;
+    border: 1px solid rgba(239, 68, 68, 0.3);
+  }
+
+  .btn-delete:hover {
+    background: rgba(239, 68, 68, 0.2);
+    border-color: rgba(239, 68, 68, 0.5);
+    transform: translateY(-2px);
+  }
+
+  .event-featured {
+    position: relative;
+  }
+
+  .event-featured-badge {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    background: linear-gradient(135deg, var(--orange-500), var(--orange-600));
+    border-radius: 16px;
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: white;
+    z-index: 2;
+    box-shadow: 0 4px 16px rgba(249, 115, 22, 0.4);
+    backdrop-filter: blur(8px);
+  }
+</style>
