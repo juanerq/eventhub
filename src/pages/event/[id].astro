@@ -44,7 +44,8 @@ const { data: eventImages } = await supabase
   .order("display_order", { ascending: true });
 
 // Obtener imagen principal como fallback
-const primaryImage = eventImages?.find(img => img.is_primary) || eventImages?.[0];
+const primaryImage =
+  eventImages?.find((img) => img.is_primary) || eventImages?.[0];
 
 // Verificar si el usuario ya está inscrito
 let isRegistered = false;
@@ -131,8 +132,8 @@ const categoryIcons: Record<string, string> = {
           <div class="event-image-section">
             {
               eventImages && eventImages.length > 0 ? (
-                <ImageCarousel 
-                  images={eventImages.map(img => img.image_url)} 
+                <ImageCarousel
+                  images={eventImages.map((img) => img.image_url)}
                   altText={event.title}
                 />
               ) : event.image_url ? (
@@ -836,6 +837,7 @@ const categoryIcons: Record<string, string> = {
   }
 
   .map-container {
+    z-index: 1;
     height: 400px;
     border-radius: 12px;
     overflow: hidden;
