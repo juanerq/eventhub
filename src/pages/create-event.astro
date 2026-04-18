@@ -1238,7 +1238,7 @@ if (!isOrganizer) {
     position: relative;
     z-index: 1;
   }
-  
+
   .file-upload-icon svg {
     width: 32px;
     height: 32px;
@@ -1782,7 +1782,7 @@ if (!isOrganizer) {
 
   // Manejo de imágenes con EventImageHandler
   import { EventImageHandler } from "../lib/eventImageHandler";
-  
+
   const imageHandler = new EventImageHandler({
     showError,
     clearErrors: clearAllErrors,
@@ -1803,6 +1803,12 @@ if (!isOrganizer) {
 
     // Validar límites del plan antes de enviar
     if (!validatePlanLimits()) {
+      return;
+    }
+
+    // Validar que haya al menos una imagen
+    if (imageHandler.getTotalImageCount() < 1) {
+      showError("event_images", "Debes subir al menos una imagen del evento");
       return;
     }
 

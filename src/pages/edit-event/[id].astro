@@ -2029,6 +2029,12 @@ const formatDateForInput = (date: string | null) => {
       return;
     }
 
+    // Validar que haya al menos una imagen
+    if (imageHandler.getTotalImageCount() < 1) {
+      showError("event_images", "Debes subir al menos una imagen del evento");
+      return;
+    }
+
     const formData = new FormData(form as HTMLFormElement);
 
     // Eliminar el campo event_images que viene del form (evitar duplicados)

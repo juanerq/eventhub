@@ -149,7 +149,7 @@ const rootProps = variant === "explore" ? { href: `/event/${event.id}` } : {};
 
     <div class="event-footer">
       <span class:list={["price-tag", { free: event.is_free }]}>
-        {event.is_free ? "Gratis" : `$${event.price.toLocaleString()}`}
+        {event.is_free ? "Gratis" : `$${event.price.toLocaleString()} COP`}
       </span>
 
       {
