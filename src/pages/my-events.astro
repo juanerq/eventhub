@@ -333,8 +333,14 @@ try {
 
   .events-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
-    gap: 2rem;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 1.5rem;
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .events-grid > * {
+    min-width: 0;
   }
 
   :global(.event-card) {
@@ -500,6 +506,18 @@ try {
 
     .events-grid {
       grid-template-columns: 1fr;
+    }
+
+    :global(.event-content) {
+      padding: 1rem;
+    }
+
+    :global(.event-title) {
+      font-size: 1.05rem;
+    }
+
+    :global(.price-tag) {
+      font-size: 0.95rem;
     }
   }
 </style>
