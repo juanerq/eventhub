@@ -1,5 +1,6 @@
 ---
 import Layout from "../layouts/Layout.astro";
+import Navbar from "../components/Navbar.astro";
 import { getUser } from "../lib/auth";
 
 const user = await getUser(Astro.cookies);
@@ -15,22 +16,7 @@ const isOrganizer = user.user_metadata?.is_organizer || false;
 
 <Layout title="Mi Perfil">
   <div class="profile">
-    <nav class="navbar">
-      <div class="nav-container">
-        <a href="/dashboard" class="logo">EventHub</a>
-        <a href="/dashboard" class="btn-back">
-          <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-            <path
-              d="M12 4l-6 6 6 6"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"></path>
-          </svg>
-          <span>Volver</span>
-        </a>
-      </div>
-    </nav>
+    <Navbar isOrganizer={isOrganizer} isAuthenticated={true} />
 
     <main class="main-content">
       <div class="container">
@@ -283,57 +269,6 @@ const isOrganizer = user.user_metadata?.is_organizer || false;
     background: linear-gradient(135deg, #020617 0%, #0c4a6e 50%, #1e293b 100%);
   }
 
-  .navbar {
-    background: rgba(37, 37, 64, 0.8);
-    backdrop-filter: blur(20px);
-    border-bottom: 1px solid var(--border);
-    padding: 1.25rem 0;
-    position: sticky;
-    top: 0;
-    z-index: 100;
-  }
-
-  .nav-container {
-    max-width: 1200px;
-    margin: 0 auto;
-    padding: 0 2rem;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-  }
-
-  .logo {
-    font-size: 1.5rem;
-    font-weight: 800;
-    background: linear-gradient(
-      135deg,
-      var(--primary) 0%,
-      var(--secondary) 100%
-    );
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-    text-decoration: none;
-  }
-
-  .btn-back {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.5rem 1rem;
-    background: rgba(255, 255, 255, 0.1);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    color: var(--text);
-    text-decoration: none;
-    font-weight: 500;
-    transition: all 0.2s ease;
-  }
-
-  .btn-back:hover {
-    background: rgba(255, 255, 255, 0.15);
-    border-color: var(--primary);
-  }
 
   .main-content {
     padding: 3rem 0;
