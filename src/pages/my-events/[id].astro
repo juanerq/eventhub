@@ -826,7 +826,7 @@ const formattedNetEarnings =
   }
 
   .main-content {
-    padding: 2rem 0 4rem;
+    padding: 2rem 0 2rem;
   }
 
   .container {
@@ -903,7 +903,7 @@ const formattedNetEarnings =
   .event-detail-container {
     display: flex;
     flex-direction: column;
-    gap: 3rem;
+    gap: 1.5rem;
   }
 
   .event-image-section {
@@ -1420,6 +1420,28 @@ const formattedNetEarnings =
 
     .event-title {
       font-size: 2rem;
+    }
+  }
+
+  @media (max-width: 720px) {
+    .main-content {
+      padding: 1rem 0 1rem;
+    }
+
+    .event-content-section {
+      padding: 1rem 0;
+    }
+
+    .event-detail-container {
+      gap: 1rem;
+    }
+
+    .event-image-section {
+      min-height: 220px;
+    }
+
+    .event-title {
+      font-size: 1.6rem;
     }
   }
 </style>

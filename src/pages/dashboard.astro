@@ -121,7 +121,11 @@ const eventsWithImages = await Promise.all(
                 <!-- Filtro de categoría -->
                 <FilterSection label="Categorías">
                   <div id="filters" class="filters">
-                    <button class="filter-btn active" data-category="all">
+                    <button
+                      type="button"
+                      class="filter-btn active"
+                      data-category="all"
+                    >
                       <span class="filter-icon">🏷️</span>
                       <span class="filter-text">Todos</span>
                     </button>
@@ -131,29 +135,21 @@ const eventsWithImages = await Promise.all(
                 <!-- Filtro de precio -->
                 <FilterSection label="Precio">
                   <div id="price-filters" class="filters">
-                    <button class="filter-btn active" data-price="all">
+                    <button
+                      type="button"
+                      class="filter-btn active"
+                      data-price="all"
+                    >
                       <span class="filter-icon">💰</span>
                       <span class="filter-text">Todos los precios</span>
                     </button>
-                    <button class="filter-btn" data-price="free">
+                    <button type="button" class="filter-btn" data-price="free">
                       <span class="filter-icon">🎁</span>
                       <span class="filter-text">Gratis</span>
                     </button>
-                    <button class="filter-btn" data-price="paid">
+                    <button type="button" class="filter-btn" data-price="paid">
                       <span class="filter-icon">💵</span>
                       <span class="filter-text">De pago</span>
-                    </button>
-                    <button class="filter-btn" data-price="0-50000">
-                      <span class="filter-icon">💸</span>
-                      <span class="filter-text">Hasta $50.000</span>
-                    </button>
-                    <button class="filter-btn" data-price="50000-100000">
-                      <span class="filter-icon">💵</span>
-                      <span class="filter-text">$50.000 - $100.000</span>
-                    </button>
-                    <button class="filter-btn" data-price="100000+">
-                      <span class="filter-icon">💎</span>
-                      <span class="filter-text">Más de $100.000</span>
                     </button>
                   </div>
 
@@ -1301,10 +1297,10 @@ const eventsWithImages = await Promise.all(
           // Mantener el botón "Todos" y agregar las categorías dinámicas
           const categoryButtons = data.categories
             .map((category: { id: string; name: string; icon: string }) => {
-              return `<button class="filter-btn" data-category="${category.id}">
-                <span class="filter-icon">${category.icon}</span>
-                <span class="filter-text">${category.name}</span>
-              </button>`;
+              return `<button type="button" class="filter-btn" data-category="${category.id}">
+                  <span class="filter-icon">${category.icon}</span>
+                  <span class="filter-text">${category.name}</span>
+                </button>`;
             })
             .join("");
 
@@ -1342,21 +1338,29 @@ const eventsWithImages = await Promise.all(
     );
     const priceButtons = document.querySelectorAll(".filter-btn[data-price]");
 
-    // Category filter buttons - cambiar categoría mediante URL
+    // Category filter buttons - aplicar filtrado cliente sin recargar
     categoryButtons.forEach((button) => {
-      button.addEventListener("click", () => {
+      button.addEventListener("click", (e) => {
+        e.preventDefault();
         const category = (button as HTMLElement).dataset.category || "all";
 
-        // Construir nueva URL con parámetro de categoría
-        const url = new URL(window.location.href);
-        if (category === "all") {
-          url.searchParams.delete("category");
-        } else {
-          url.searchParams.set("category", category);
-        }
+        // Actualizar clases activas
+        categoryButtons.forEach((btn) => btn.classList.remove("active"));
+        (button as HTMLElement).classList.add("active");
 
-        // Recargar página con nueva categoría
-        window.location.href = url.toString();
+        // Actualizar estado y filtrar en cliente
+        currentFilters.category = category;
+        applyFiltersAndRender();
+
+        // Actualizar URL sin recargar
+        try {
+          const url = new URL(window.location.href);
+          if (category === "all") url.searchParams.delete("category");
+          else url.searchParams.set("category", category);
+          history.pushState({}, "", url.toString());
+        } catch (err) {
+          // ignore
+        }
       });
     });
 
@@ -1400,6 +1404,14 @@ const eventsWithImages = await Promise.all(
     distanceKm: 10,
   };
 
+  // Inicializar categoría desde la URL para mantener estado consistente
+  try {
+    const _params = new URLSearchParams(window.location.search);
+    currentFilters.category = _params.get("category") || "all";
+  } catch (err) {
+    currentFilters.category = "all";
+  }
+
   function applyFiltersAndRender() {
     const eventsGrid = document.getElementById("events-grid");
     const emptyState = document.getElementById("events-empty");
@@ -1430,6 +1442,13 @@ const eventsWithImages = await Promise.all(
             category.includes(searchLower) ||
             city.includes(searchLower) ||
             locationName.includes(searchLower));
+      }
+
+      // Filtro de categoría (cliente)
+      if (currentFilters.category && currentFilters.category !== "all") {
+        const cardCategory = (wrapper.dataset.category || "").toLowerCase();
+        const wanted = currentFilters.category.toLowerCase();
+        isVisible = isVisible && cardCategory === wanted;
       }
 
       // Filtro de fecha por rango
@@ -2050,8 +2069,17 @@ const eventsWithImages = await Promise.all(
         }
       });
 
-      // Recargar página sin query params
-      window.location.href = window.location.pathname;
+      // Update URL without reloading (remove query params) and re-render client-side
+      try {
+        const url = new URL(window.location.href);
+        url.search = "";
+        history.pushState({}, "", url.pathname + url.search);
+      } catch (err) {
+        // ignore history update failures
+      }
+
+      // Re-apply client-side filters and render
+      applyFiltersAndRender();
     });
   });
 </script>
