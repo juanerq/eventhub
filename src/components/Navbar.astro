@@ -88,7 +88,6 @@ const {
     </button>
   </div>
 </nav>
-
 <!-- Menú móvil overlay (fuera del nav para evitar problemas de z-index) -->
 <div class="mobile-menu-backdrop" id="mobile-menu-backdrop"></div>
 <div class="mobile-menu" id="mobile-menu">
@@ -581,6 +580,7 @@ const {
   @media (max-width: 768px) {
     .nav-container {
       padding: 0 1rem;
+      position: relative; /* make container the positioning context for the hamburger */
     }
 
     /* Hide desktop navigation */
@@ -591,11 +591,24 @@ const {
 
     /* Show hamburger button */
     .hamburger {
-      display: flex;
+      display: flex !important;
+      z-index: 160 !important;
     }
 
     .logo {
       font-size: 1.25rem;
+    }
+  }
+
+  /* Ensure hamburger is visible on mobile even if other elements overlap */
+  @media (max-width: 768px) {
+    .hamburger {
+      position: absolute !important;
+      top: 50% !important;
+      right: 1rem !important;
+      transform: translateY(-50%) !important;
+      display: flex !important;
+      z-index: 99999 !important;
     }
   }
 </style>

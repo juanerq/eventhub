@@ -10,8 +10,34 @@ const { title } = Astro.props;
 <html lang="es">
 	<head>
 		<meta charset="UTF-8" />
-		<meta name="viewport" content="width=device-width" />
-		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<!-- Generate a PNG favicon from an emoji (no SVG) -->
+		<script>
+			(function () {
+				try {
+					const emoji = "🏞️";
+					const size = 64;
+					const canvas = document.createElement("canvas");
+					canvas.width = size;
+					canvas.height = size;
+					const ctx = canvas.getContext("2d");
+					if (!ctx) return;
+					ctx.clearRect(0, 0, size, size);
+					ctx.textAlign = "center";
+					ctx.textBaseline = "middle";
+					ctx.font =
+						Math.floor(size * 0.9) +
+						'px "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif';
+					ctx.fillText(emoji, size / 2, size / 2);
+					const dataUrl = canvas.toDataURL("image/png");
+					const link = document.createElement("link");
+					link.rel = "icon";
+					link.type = "image/png";
+					link.href = dataUrl;
+					document.head.appendChild(link);
+				} catch (e) {}
+			})();
+		</script>
 		<link rel="icon" href="/favicon.ico" />
 		<meta name="generator" content={Astro.generator} />
 		<title>{title} - EventHub</title>

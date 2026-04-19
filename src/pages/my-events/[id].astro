@@ -569,6 +569,50 @@ if (showRegistrations) {
   });
 </script>
 
+<script>
+  // Manejador del botón Eliminar en la página de detalle
+  document.addEventListener("DOMContentLoaded", () => {
+    const delBtn = document.querySelector(".btn-delete[data-event-id]");
+    if (!delBtn) return;
+
+    delBtn.addEventListener("click", async (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+
+      const eventId = delBtn.getAttribute("data-event-id");
+      if (!eventId) return;
+
+      const confirmed = confirm(
+        "¿Estás seguro de que quieres eliminar este evento?",
+      );
+      if (!confirmed) return;
+
+      try {
+        const response = await fetch(`/api/events/${eventId}`, {
+          method: "DELETE",
+          credentials: "same-origin",
+          headers: { "Content-Type": "application/json" },
+        });
+
+        const result = await response.json();
+
+        if (response.ok && result.success) {
+          // Redirigir al dashboard después de eliminar
+          window.location.href = "/dashboard";
+        } else {
+          alert(
+            "Error al eliminar el evento: " +
+              (result.error || "Error desconocido"),
+          );
+        }
+      } catch (error) {
+        console.error("Error deleting event:", error);
+        alert("Error al eliminar el evento");
+      }
+    });
+  });
+</script>
+
 <style>
   :root {
     --violet-50: #faf5ff;

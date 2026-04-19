@@ -79,12 +79,15 @@ const hasMultipleImages = images.length > 1;
     display: flex;
     height: 100%;
     transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    will-change: transform;
   }
 
   .carousel-slide {
-    min-width: 100%;
+    /* Force slides to exactly the visible container width */
+    flex: 0 0 100%;
+    width: 100%;
+    box-sizing: border-box;
     height: 100%;
-    flex-shrink: 0;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -92,8 +95,10 @@ const hasMultipleImages = images.length > 1;
   }
 
   .carousel-image {
-    width: 100%;
-    height: 100%;
+    width: auto;
+    height: auto;
+    max-width: 100%;
+    max-height: 100%;
     object-fit: contain;
     display: block;
   }
@@ -211,6 +216,8 @@ const hasMultipleImages = images.length > 1;
     private prevButton: HTMLButtonElement | null;
     private nextButton: HTMLButtonElement | null;
     private indicators: NodeListOf<HTMLButtonElement>;
+    private trackContainer: HTMLElement | null = null;
+    private resizeObserver: any = null;
     private currentIndex: number = 0;
     private touchStartX: number = 0;
     private touchEndX: number = 0;
@@ -218,6 +225,7 @@ const hasMultipleImages = images.length > 1;
     constructor(container: HTMLElement) {
       this.container = container;
       this.track = container.querySelector('.carousel-track')!;
+      this.trackContainer = container.querySelector('.carousel-track-container') || container;
       this.slides = container.querySelectorAll('.carousel-slide');
       this.prevButton = container.querySelector('.carousel-button-prev');
       this.nextButton = container.querySelector('.carousel-button-next');
@@ -245,6 +253,24 @@ const hasMultipleImages = images.length > 1;
         this.touchEndX = e.changedTouches[0].clientX;
         this.handleSwipe();
       });
+
+      // Observe container size changes to recalc positions
+      if (typeof ResizeObserver !== 'undefined') {
+        this.resizeObserver = new ResizeObserver(() => this.updateCarousel());
+        if (this.trackContainer) this.resizeObserver.observe(this.trackContainer);
+      }
+
+      // Recalcular cuando las imágenes carguen (puede cambiar el layout)
+      this.slides.forEach((slide) => {
+        const img = slide.querySelector('img');
+        if (img) img.addEventListener('load', () => this.updateCarousel());
+      });
+
+        // Ajustar posición inicial y en cambio de tamaño
+        window.addEventListener('resize', () => this.updateCarousel());
+
+        // Asegurar estado inicial
+        this.updateCarousel();
 
       // Teclado
       document.addEventListener('keydown', (e) => {
@@ -286,9 +312,12 @@ const hasMultipleImages = images.length > 1;
     }
 
     private updateCarousel() {
-      // Mover el track
-      const offset = -this.currentIndex * 100;
-      this.track.style.transform = `translateX(${offset}%)`;
+      // Mover el track usando el ancho del contenedor (más estable en mobile)
+      const containerEl = this.trackContainer || this.container;
+      const containerWidth = Math.round(containerEl.getBoundingClientRect().width);
+      if (!containerWidth || isNaN(containerWidth)) return;
+      const offsetPx = -Math.round(this.currentIndex * containerWidth);
+      this.track.style.transform = `translateX(${offsetPx}px)`;
 
       // Actualizar indicadores
       this.indicators.forEach((indicator, index) => {
