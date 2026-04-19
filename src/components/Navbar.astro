@@ -1,6 +1,10 @@
 ---
 interface Props {
-  activePage?: "explorar" | "mis-eventos" | "crear-evento";
+  activePage?:
+    | "explorar"
+    | "mis-eventos"
+    | "crear-evento"
+    | "mis-inscripciones";
   isOrganizer?: boolean;
   isAuthenticated?: boolean;
 }
@@ -24,6 +28,16 @@ const {
       >
         Explorar
       </a>
+      {
+        isAuthenticated && (
+          <a
+            href="/my-registrations"
+            class={`nav-link ${activePage === "mis-inscripciones" ? "active" : ""}`}
+          >
+            Mis Inscripciones
+          </a>
+        )
+      }
       {
         isOrganizer && (
           <>
@@ -125,6 +139,24 @@ const {
       </svg>
       Explorar
     </a>
+    {
+      isAuthenticated && (
+        <a
+          href="/my-registrations"
+          class={`mobile-nav-link ${activePage === "mis-inscripciones" ? "active" : ""}`}
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+            <path
+              d="M3 7h18M3 12h18M3 17h18"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+            />
+          </svg>
+          Mis Inscripciones
+        </a>
+      )
+    }
     {
       isOrganizer && (
         <>

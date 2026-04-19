@@ -8,6 +8,21 @@ import { supabase } from "../../lib/supabase";
 const user = await getUser(Astro.cookies);
 const { id } = Astro.params;
 
+// Asegurar que el cliente público de Supabase use la sesión del usuario
+// para que las consultas a `event_registrations` respeten las políticas RLS.
+const accessToken = Astro.cookies.get("sb-access-token")?.value;
+const refreshToken = Astro.cookies.get("sb-refresh-token")?.value;
+if (accessToken || refreshToken) {
+  try {
+    await supabase.auth.setSession({
+      access_token: accessToken,
+      refresh_token: refreshToken,
+    });
+  } catch (sessionErr) {
+    console.warn("Could not set session on supabase client:", sessionErr);
+  }
+}
+
 if (!id) {
   return Astro.redirect("/dashboard");
 }
@@ -51,11 +66,13 @@ const primaryImage =
 let isRegistered = false;
 let registration = null;
 if (user) {
+  // Sólo consideramos inscripciones confirmadas como "ya inscrito"
   const { data: reg } = await supabase
     .from("event_registrations")
     .select("*")
     .eq("event_id", id)
     .eq("user_id", user.id)
+    .eq("status", "confirmed")
     .single();
 
   if (reg) {
@@ -75,6 +92,18 @@ const spotsAvailable = event.capacity
   ? event.capacity - (registrationsCount || 0)
   : null;
 const isFull = event.capacity && spotsAvailable !== null && spotsAvailable <= 0;
+
+// Calcular ganancias (visible para el organizador)
+const confirmedCount = registrationsCount || 0;
+const isOrganizer = user && event.organizer_id === user.id;
+
+// Si el evento pertenece al usuario actual, redirigir al panel de "Mis eventos" (vista del organizador)
+if (isOrganizer) {
+  return Astro.redirect(`/my-events/${id}`);
+}
+const earnings = event.is_free ? 0 : confirmedCount * (event.price || 0);
+const formattedEarnings =
+  typeof earnings === "number" ? earnings.toLocaleString("es-CO") : "0";
 
 // Formatear fecha
 const eventDate = new Date(event.start_date);
@@ -351,6 +380,27 @@ const categoryIcons: Record<string, string> = {
               }
             </div>
 
+            {
+              isOrganizer && (
+                <div class="earnings-section">
+                  <h3>Ganancias del evento</h3>
+                  <p>Entradas confirmadas: {confirmedCount}</p>
+                  <p>
+                    Precio por entrada:{" "}
+                    {event.is_free
+                      ? "Gratis"
+                      : `$${(event.price || 0).toLocaleString("es-CO")} COP`}
+                  </p>
+                  <p class="earnings-total">
+                    Ganancias totales:{" "}
+                    <strong>
+                      {event.is_free ? "Gratis" : `$${formattedEarnings} COP`}
+                    </strong>
+                  </p>
+                </div>
+              )
+            }
+
             <!-- Descripción -->
             <div class="event-description">
               <h2>Acerca del evento</h2>
@@ -384,6 +434,15 @@ const categoryIcons: Record<string, string> = {
                         "es-CO",
                       )}
                     </p>
+                    <div style="margin-top:1rem;">
+                      <button
+                        id="cancel-btn"
+                        class="btn-cancel"
+                        data-registration-id={registration.id}
+                      >
+                        Cancelar inscripción
+                      </button>
+                    </div>
                   </div>
                 ) : isFull ? (
                   <div class="event-full">
@@ -425,6 +484,26 @@ const categoryIcons: Record<string, string> = {
                     <a href="/login" class="btn-primary">
                       Iniciar sesión
                     </a>
+                  </div>
+                ) : isOrganizer ? (
+                  <div class="owner-note">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none">
+                      <path
+                        d="M12 2a2 2 0 0 0-2 2v2H8a2 2 0 0 0-2 2v2H4a2 2 0 0 0-2 2v6h20v-6a2 2 0 0 0-2-2h-2V8a2 2 0 0 0-2-2h-2V4a2 2 0 0 0-2-2z"
+                        stroke="currentColor"
+                        stroke-width="1"
+                      />
+                    </svg>
+                    <h3>Este es tu evento</h3>
+                    <p>
+                      No puedes inscribirte en tu propio evento. Puedes editar o
+                      administrar las inscripciones desde tu panel.
+                    </p>
+                    <div style="margin-top:1rem;">
+                      <a href={`/edit-event/${id}`} class="btn-primary">
+                        Editar evento
+                      </a>
+                    </div>
                   </div>
                 ) : (
                   <form id="registration-form" class="registration-form">
@@ -598,6 +677,66 @@ const categoryIcons: Record<string, string> = {
       }
     });
   }
+</script>
+
+<script
+  define:vars={{
+    registrationId: registration ? registration.id : null,
+    eventId: id,
+  }}
+>
+  (function () {
+    const cancelBtn = document.getElementById("cancel-btn");
+    if (!cancelBtn) return;
+
+    cancelBtn.addEventListener("click", async (e) => {
+      e.preventDefault();
+
+      if (!confirm("¿Deseas cancelar tu inscripción?")) return;
+
+      cancelBtn.disabled = true;
+      const original = cancelBtn.innerHTML;
+      cancelBtn.innerHTML = "Cancelando...";
+
+      // Preferir id del dataset en runtime (más robusto)
+      const runtimeRegistrationId =
+        cancelBtn.dataset?.registrationId || registrationId;
+
+      try {
+        const res = await fetch("/api/registrations/cancel", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            registration_id: runtimeRegistrationId,
+            event_id: eventId,
+          }),
+          credentials: "same-origin",
+        });
+
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Error al cancelar");
+
+        // Actualizar UI inmediatamente sin esperar a recarga
+        const regSection = document.querySelector(".registration-section");
+        if (regSection) {
+          regSection.innerHTML = `
+              <div class="success-message" style="display:block; text-align:center; padding:2rem;">
+                <h3>Inscripción cancelada</h3>
+                <p>Tu inscripción ha sido cancelada correctamente.</p>
+              </div>
+            `;
+        } else {
+          // fallback: recargar
+          setTimeout(() => window.location.reload(), 600);
+        }
+      } catch (err) {
+        console.error("Cancel registration error", err);
+        alert(err.message || "No se pudo cancelar la inscripción");
+        cancelBtn.disabled = false;
+        cancelBtn.innerHTML = original;
+      }
+    });
+  })();
 </script>
 
 <script
@@ -851,6 +990,31 @@ const categoryIcons: Record<string, string> = {
     padding: 2rem;
   }
 
+  .earnings-section {
+    margin-top: 1.25rem;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.04);
+    border-radius: 12px;
+    padding: 1rem 1.25rem;
+    color: var(--text);
+  }
+
+  .earnings-section h3 {
+    margin: 0 0 0.5rem 0;
+    font-size: 1.125rem;
+    color: var(--text);
+  }
+
+  .earnings-section p {
+    margin: 0.25rem 0;
+    color: var(--text-muted);
+  }
+
+  .earnings-section .earnings-total strong {
+    color: var(--violet-300);
+    font-size: 1rem;
+  }
+
   .registration-form h3 {
     font-size: 1.5rem;
     margin-bottom: 1.5rem;
@@ -899,18 +1063,23 @@ const categoryIcons: Record<string, string> = {
     justify-content: center;
     gap: 0.75rem;
     padding: 1rem;
-    background: linear-gradient(135deg, var(--violet-600), var(--fuchsia-600));
+    background: linear-gradient(135deg, #10b981, #34d399);
     border: none;
     border-radius: 12px;
     color: white;
     font-size: 1.125rem;
     font-weight: 600;
     cursor: pointer;
-    transition: transform 0.2s ease;
+    transition:
+      transform 0.2s ease,
+      box-shadow 0.15s ease;
+    box-shadow: 0 8px 20px rgba(16, 185, 129, 0.12);
   }
 
   .btn-register:hover:not(:disabled) {
     transform: translateY(-2px);
+    background: linear-gradient(135deg, #059669, #10b981);
+    box-shadow: 0 14px 34px rgba(16, 185, 129, 0.18);
   }
 
   .btn-register:disabled {
@@ -934,7 +1103,7 @@ const categoryIcons: Record<string, string> = {
     width: 64px;
     height: 64px;
     margin: 0 auto 1rem;
-    background: var(--emerald-500);
+    background: #10b981;
     border-radius: 50%;
     display: flex;
     align-items: center;
@@ -987,6 +1156,30 @@ const categoryIcons: Record<string, string> = {
     color: var(--text-muted);
   }
 
+  .owner-note {
+    text-align: center;
+    padding: 2rem;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.03);
+  }
+
+  .owner-note svg {
+    color: var(--text-muted);
+    margin-bottom: 1rem;
+  }
+
+  .owner-note h3 {
+    font-size: 1.5rem;
+    margin-bottom: 0.75rem;
+    color: var(--text);
+  }
+
+  .owner-note p {
+    color: var(--text-muted);
+    margin-bottom: 0.75rem;
+  }
+
   .btn-primary {
     display: inline-block;
     margin-top: 1.5rem;
@@ -1001,6 +1194,33 @@ const categoryIcons: Record<string, string> = {
 
   .btn-primary:hover {
     transform: translateY(-2px);
+  }
+
+  .btn-cancel {
+    display: inline-block;
+    padding: 0.6rem 1rem;
+    background: linear-gradient(135deg, #ef4444, #dc2626);
+    color: #fff;
+    border: 1px solid rgba(220, 38, 38, 0.9);
+    border-radius: 10px;
+    cursor: pointer;
+    font-weight: 600;
+    transition:
+      background 0.15s ease,
+      transform 0.15s ease,
+      box-shadow 0.15s ease;
+    box-shadow: 0 6px 18px rgba(239, 68, 68, 0.12);
+  }
+
+  .btn-cancel:hover:not(:disabled) {
+    background: linear-gradient(135deg, #dc2626, #b91c1c);
+    transform: translateY(-2px);
+    box-shadow: 0 10px 28px rgba(220, 38, 38, 0.18);
+  }
+
+  .btn-cancel:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
   }
 
   .error-message {

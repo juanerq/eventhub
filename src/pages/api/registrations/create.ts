@@ -54,15 +54,17 @@ export const POST: APIRoute = async ({ request, cookies }) => {
       );
     }
 
-    // Verificar si ya está inscrito
+    // Verificar si ya existe una inscripción del usuario para este evento.
+    // Si existe y NO está cancelada, bloqueamos; si existe y está cancelada,
+    // permitimos reactivarla (la actualizamos a `confirmed`).
     const { data: existingReg } = await supabase
       .from('event_registrations')
-      .select('id')
+      .select('*')
       .eq('event_id', event_id)
       .eq('user_id', user.id)
       .single();
 
-    if (existingReg) {
+    if (existingReg && existingReg.status !== 'cancelled') {
       return new Response(
         JSON.stringify({ error: 'Ya estás inscrito en este evento' }),
         { status: 409, headers: { 'Content-Type': 'application/json' } }
@@ -85,7 +87,40 @@ export const POST: APIRoute = async ({ request, cookies }) => {
       }
     }
 
-    // Crear inscripción
+    // Si existe pero estaba cancelada, reactivar (actualizar) la inscripción
+    if (existingReg && existingReg.status === 'cancelled') {
+      const { data: updated, error: updateError } = await supabase
+        .from('event_registrations')
+        .update({
+          full_name,
+          email,
+          phone,
+          additional_info,
+          status: 'confirmed',
+        })
+        .eq('id', existingReg.id)
+        .select()
+        .single();
+
+      if (updateError) {
+        console.error('Error reactivating registration:', updateError);
+        return new Response(
+          JSON.stringify({ error: 'Error al reactivar la inscripción' }),
+          { status: 500, headers: { 'Content-Type': 'application/json' } }
+        );
+      }
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          ticket_number: updated.ticket_number,
+          registration_id: updated.id,
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Crear nueva inscripción
     const { data: registration, error: regError } = await supabase
       .from('event_registrations')
       .insert({

@@ -1,0 +1,474 @@
+---
+import Layout from "../layouts/Layout.astro";
+import Navbar from "../components/Navbar.astro";
+import EventCard from "../components/EventCard.astro";
+import { getUser } from "../lib/auth";
+import { supabase } from "../lib/supabase";
+
+const user = await getUser(Astro.cookies);
+
+if (!user) {
+  return Astro.redirect("/login");
+}
+
+const isOrganizer = user.user_metadata?.is_organizer || false;
+
+// Cargar eventos en los que el usuario está inscrito
+let registeredEvents: any[] = [];
+let error = null;
+
+try {
+  // Establecer sesión en el cliente público usando las cookies (para respetar RLS)
+  const accessToken = Astro.cookies.get("sb-access-token")?.value;
+  const refreshToken = Astro.cookies.get("sb-refresh-token")?.value;
+
+  if (accessToken || refreshToken) {
+    try {
+      await supabase.auth.setSession({
+        access_token: accessToken,
+        refresh_token: refreshToken,
+      });
+    } catch (sessionErr) {
+      console.warn("Could not set session on supabase client:", sessionErr);
+    }
+  }
+  const { data: regs, error: regsError } = await supabase
+    .from("event_registrations")
+    .select("id, event_id, status, ticket_number, created_at")
+    .eq("user_id", user.id)
+    // Excluir inscripciones canceladas para que no aparezcan en "Mis Inscripciones"
+    .neq("status", "cancelled");
+
+  if (regsError) {
+    console.error("Error fetching registrations:", regsError);
+    error = regsError;
+  } else if (regs && regs.length > 0) {
+    const eventIds = regs.map((r: any) => r.event_id).filter(Boolean);
+
+    const { data: events, error: eventsError } = await supabase
+      .from("events")
+      .select("*")
+      .in("id", eventIds)
+      .order("start_date", { ascending: false });
+
+    if (eventsError) {
+      console.error("Error fetching events:", eventsError);
+      error = eventsError;
+    } else if (events && events.length > 0) {
+      const { data: images } = await supabase
+        .from("event_images")
+        .select("event_id, image_url, is_primary")
+        .in("event_id", eventIds);
+
+      const imageMap: Record<string, string> = {};
+      images?.forEach((img: any) => {
+        if (img.is_primary) imageMap[img.event_id] = img.image_url;
+        else if (!imageMap[img.event_id])
+          imageMap[img.event_id] = img.image_url;
+      });
+
+      // Map registrations by event_id so we can attach status/ticket info to each event
+      const regMap: Record<string, any> = {};
+      regs?.forEach((r: any) => {
+        if (r && r.event_id) regMap[r.event_id] = r;
+      });
+
+      registeredEvents = events.map((ev: any) => ({
+        ...ev,
+        image_url: imageMap[ev.id] || null,
+        registration: regMap[ev.id] || null,
+      }));
+    }
+  }
+} catch (err) {
+  console.error("Error loading registered events:", err);
+  error = err;
+}
+---
+
+<Layout title="Mis Inscripciones">
+  <div class="dashboard">
+    <Navbar
+      activePage="mis-inscripciones"
+      isOrganizer={isOrganizer}
+      isAuthenticated={true}
+    />
+
+    <main class="main-content">
+      <div class="container">
+        <div class="my-events-section">
+          <div class="section-header">
+            <h3>Mis Inscripciones</h3>
+          </div>
+
+          {
+            error && (
+              <div class="error-box">
+                <strong>Error cargando inscripciones:</strong>
+                <pre>{JSON.stringify(error, null, 2)}</pre>
+              </div>
+            )
+          }
+
+          {
+            registeredEvents.length > 0 ? (
+              <div class="events-grid">
+                {registeredEvents.map((event, index) => (
+                  <div class="event-item" data-event-id={event.id}>
+                    <EventCard event={event} variant="explore" index={index} />
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div class="empty-state">
+                <svg width="64" height="64" viewBox="0 0 24 24" fill="none">
+                  <path
+                    d="M19 3H5a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2V5a2 2 0 00-2-2zM9 11h6M12 8v6"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                  />
+                </svg>
+                <h4>No estás inscrito en ningún evento</h4>
+                <p>Explora los eventos y únete a los que te interesen.</p>
+                <a href="/dashboard" class="btn-empty-action">
+                  Ver eventos
+                </a>
+              </div>
+            )
+          }
+        </div>
+      </div>
+    </main>
+  </div>
+</Layout>
+
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    document.querySelectorAll(".btn-cancel").forEach((btn) => {
+      btn.addEventListener("click", async (e) => {
+        e.preventDefault();
+        const eventId = btn.dataset.eventId;
+        if (!eventId) return;
+        if (!confirm("¿Deseas cancelar tu inscripción para este evento?"))
+          return;
+
+        btn.disabled = true;
+        const original = btn.innerHTML;
+        btn.innerHTML = "Cancelando...";
+
+        try {
+          const res = await fetch("/api/registrations/cancel", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ event_id: eventId }),
+            credentials: "same-origin",
+          });
+
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || "Error al cancelar");
+
+          // Remover el elemento de la lista
+          const wrapper = btn.closest(".event-item");
+          if (wrapper) wrapper.remove();
+        } catch (err) {
+          console.error("Error cancelling registration:", err);
+          alert(err.message || "No se pudo cancelar la inscripción");
+          btn.disabled = false;
+          btn.innerHTML = original;
+        }
+      });
+    });
+  });
+</script>
+
+<style>
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+
+  :root {
+    --violet-50: #faf5ff;
+    --violet-100: #f3e8ff;
+    --violet-200: #e9d5ff;
+    --violet-300: #d8b4fe;
+    --violet-400: #c084fc;
+    --violet-500: #a855f7;
+    --violet-600: #9333ea;
+    --violet-700: #7e22ce;
+    --violet-800: #6b21a8;
+    --violet-900: #581c87;
+    --violet-950: #3b0764;
+
+    --fuchsia-50: #fdf4ff;
+    --fuchsia-100: #fae8ff;
+    --fuchsia-200: #f5d0fe;
+    --fuchsia-300: #f0abfc;
+    --fuchsia-400: #e879f9;
+    --fuchsia-500: #d946ef;
+    --fuchsia-600: #c026d3;
+    --fuchsia-700: #a21caf;
+    --fuchsia-800: #86198f;
+    --fuchsia-900: #701a75;
+
+    --orange-50: #fff7ed;
+    --orange-100: #ffedd5;
+    --orange-200: #fed7aa;
+    --orange-300: #fdba74;
+    --orange-400: #fb923c;
+    --orange-500: #f97316;
+    --orange-600: #ea580c;
+    --orange-700: #c2410c;
+    --orange-800: #9a3412;
+    --orange-900: #7c2d12;
+
+    --cyan-50: #ecfeff;
+    --cyan-100: #cffafe;
+    --cyan-200: #a5f3fc;
+    --cyan-300: #67e8f9;
+    --cyan-400: #22d3ee;
+    --cyan-500: #06b6d4;
+    --cyan-600: #0891b2;
+    --cyan-700: #0e7490;
+    --cyan-800: #155e75;
+    --cyan-900: #164e63;
+
+    --emerald-50: #ecfdf5;
+    --emerald-100: #d1fae5;
+    --emerald-200: #a7f3d0;
+    --emerald-300: #6ee7b7;
+    --emerald-400: #34d399;
+    --emerald-500: #10b981;
+    --emerald-600: #059669;
+    --emerald-700: #047857;
+    --emerald-800: #065f46;
+    --emerald-900: #064e3b;
+
+    --navy-50: #f0f9ff;
+    --navy-100: #e0f2fe;
+    --navy-200: #bae6fd;
+    --navy-300: #7dd3fc;
+    --navy-400: #38bdf8;
+    --navy-500: #0ea5e9;
+    --navy-600: #0284c7;
+    --navy-700: #0369a1;
+    --navy-800: #075985;
+    --navy-900: #0c4a6e;
+    --navy-950: #082f49;
+
+    --slate-50: #f8fafc;
+    --slate-100: #f1f5f9;
+    --slate-200: #e2e8f0;
+    --slate-300: #cbd5e1;
+    --slate-400: #94a3b8;
+    --slate-500: #64748b;
+    --slate-600: #475569;
+    --slate-700: #334155;
+    --slate-800: #1e293b;
+    --slate-900: #0f172a;
+    --slate-950: #020617;
+
+    --primary: var(--violet-600);
+    --primary-hover: var(--violet-700);
+    --primary-dark: var(--violet-700);
+    --secondary: var(--fuchsia-500);
+    --accent: var(--fuchsia-500);
+    --accent-hover: var(--fuchsia-600);
+    --warm-accent: var(--orange-500);
+    --cool-accent: var(--cyan-400);
+    --dark: var(--slate-950);
+    --dark-light: var(--slate-900);
+    --background: var(--slate-950);
+    --background-light: var(--slate-900);
+    --text: var(--slate-50);
+    --text-muted: var(--slate-400);
+    --success: var(--emerald-500);
+    --border: rgba(255, 255, 255, 0.08);
+  }
+
+  .dashboard {
+    min-height: 100vh;
+    background: linear-gradient(
+      135deg,
+      var(--slate-950) 0%,
+      var(--navy-900) 50%,
+      var(--slate-800) 100%
+    );
+  }
+
+  .main-content {
+    padding: 3rem 0;
+  }
+
+  .container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 2rem;
+  }
+
+  .my-events-section {
+    animation: fadeInUp 0.6s ease 0.1s backwards;
+  }
+
+  .section-header {
+    margin-bottom: 2rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 1rem;
+  }
+
+  .error-box {
+    background: rgba(220, 38, 38, 0.08);
+    border: 1px solid rgba(220, 38, 38, 0.18);
+    color: #ffdada;
+    padding: 1rem;
+    border-radius: 8px;
+    margin-bottom: 1rem;
+    font-size: 0.95rem;
+  }
+
+  .section-header h3 {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--text);
+    margin-bottom: 0;
+  }
+
+  .empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 4rem 2rem;
+    gap: 1rem;
+    text-align: center;
+  }
+
+  .empty-state svg {
+    color: var(--text-muted);
+    margin-bottom: 1rem;
+  }
+
+  .empty-state h4 {
+    font-size: 1.5rem;
+    color: var(--text);
+    margin: 0;
+  }
+
+  .empty-state p {
+    color: var(--text-muted);
+    font-size: 1.1rem;
+  }
+
+  .btn-empty-action {
+    display: inline-block;
+    margin-top: 1rem;
+    padding: 0.75rem 1.5rem;
+    background: linear-gradient(135deg, var(--violet-600), var(--fuchsia-600));
+    color: white;
+    text-decoration: none;
+    border-radius: 8px;
+    font-weight: 600;
+    transition: all 0.3s ease;
+  }
+
+  .btn-empty-action:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(147, 51, 234, 0.4);
+  }
+
+  .events-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    gap: 2rem;
+  }
+
+  .event-item {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .event-item-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.5rem;
+  }
+
+  .btn-cancel {
+    padding: 0.5rem 0.75rem;
+    border-radius: 8px;
+    background: linear-gradient(135deg, #ef4444, #dc2626);
+    color: #fff;
+    border: 1px solid rgba(220, 38, 38, 0.9);
+    font-weight: 700;
+    cursor: pointer;
+    transition:
+      background 0.15s ease,
+      transform 0.12s ease,
+      box-shadow 0.15s ease;
+    box-shadow: 0 6px 16px rgba(239, 68, 68, 0.12);
+  }
+
+  .btn-cancel:hover:not(:disabled) {
+    background: linear-gradient(135deg, #dc2626, #b91c1c);
+    transform: translateY(-2px);
+    box-shadow: 0 10px 24px rgba(220, 38, 38, 0.18);
+  }
+
+  .btn-cancel:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
+  /* Status badges for user registrations */
+  .status {
+    display: inline-block;
+    padding: 0.2rem 0.6rem;
+    border-radius: 999px;
+    font-weight: 700;
+    font-size: 0.85rem;
+    text-transform: capitalize;
+    color: var(--text);
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid transparent;
+  }
+
+  .status--confirmed {
+    background: rgba(16, 185, 129, 0.1);
+    color: #10b981;
+    border-color: rgba(16, 185, 129, 0.18);
+  }
+
+  .status--cancelled {
+    background: rgba(239, 68, 68, 0.08);
+    color: #ef4444;
+    border-color: rgba(239, 68, 68, 0.18);
+  }
+
+  .status--attended {
+    background: rgba(99, 102, 241, 0.08);
+    color: #6366f1;
+    border-color: rgba(99, 102, 241, 0.16);
+  }
+
+  :global(.event-card) {
+    background: rgba(37, 37, 64, 0.6);
+    backdrop-filter: blur(20px);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    overflow: hidden;
+    transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    animation: fadeInUp 0.6s ease backwards;
+  }
+
+  :global(.event-card:hover) {
+    transform: translateY(-8px);
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+    border-color: rgba(147, 51, 234, 0.3);
+  }
+</style>

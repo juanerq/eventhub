@@ -8,6 +8,20 @@ import { supabase } from "../../lib/supabase";
 const user = await getUser(Astro.cookies);
 const { id } = Astro.params;
 
+// Ensure Supabase client runs queries under the logged-in user (RLS)
+const accessToken = Astro.cookies.get("sb-access-token")?.value;
+const refreshToken = Astro.cookies.get("sb-refresh-token")?.value;
+if (accessToken || refreshToken) {
+  try {
+    await supabase.auth.setSession({
+      access_token: accessToken,
+      refresh_token: refreshToken,
+    });
+  } catch (sessionErr) {
+    console.warn("Could not set session on supabase client:", sessionErr);
+  }
+}
+
 if (!id) {
   return Astro.redirect("/dashboard");
 }
@@ -35,42 +49,16 @@ const { data: organizer } = await supabase
 if (organizer) {
   event.organizer = organizer;
 }
-
 // Obtener TODAS las imágenes del evento (ordenadas, primero la principal)
 const { data: eventImages } = await supabase
   .from("event_images")
   .select("image_url, is_primary, display_order")
   .eq("event_id", id)
   .order("display_order", { ascending: true });
-
-// Obtener imagen principal como fallback
-const primaryImage =
-  eventImages?.find((img) => img.is_primary) || eventImages?.[0];
-
-// Verificar si el usuario ya está inscrito
-let isRegistered = false;
-let registration = null;
-if (user) {
-  const { data: reg } = await supabase
-    .from("event_registrations")
-    .select("*")
-    .eq("event_id", id)
-    .eq("user_id", user.id)
-    .single();
-
-  if (reg) {
-    isRegistered = true;
-    registration = reg;
-  }
-}
-
 // Contar inscripciones actuales
 const { count: registrationsCount } = await supabase
   .from("event_registrations")
-  .select("*", { count: "exact", head: true })
-  .eq("event_id", id)
-  .eq("status", "confirmed");
-
+  .select("*", { count: "exact", head: true });
 const spotsAvailable = event.capacity
   ? event.capacity - (registrationsCount || 0)
   : null;
@@ -116,6 +104,20 @@ if (showRegistrations) {
     registrationsList = regs || [];
   }
 }
+
+// Calcular ganancias a partir de inscripciones confirmadas
+const confirmedCount = registrationsList.filter(
+  (r) => r.status === "confirmed",
+).length;
+const earnings = event.is_free ? 0 : confirmedCount * (event.price || 0);
+const platformFee = event.is_free ? 0 : Math.round(earnings * 0.05);
+const netEarnings = earnings - platformFee;
+const formattedEarnings =
+  typeof earnings === "number" ? earnings.toLocaleString("es-CO") : "0";
+const formattedPlatformFee =
+  typeof platformFee === "number" ? platformFee.toLocaleString("es-CO") : "0";
+const formattedNetEarnings =
+  typeof netEarnings === "number" ? netEarnings.toLocaleString("es-CO") : "0";
 ---
 
 <Layout title={event.title}>
@@ -179,6 +181,151 @@ if (showRegistrations) {
             </button>
           </div>
         </div>
+
+        {
+          showRegistrations && (
+            <div class="registrations-table-section">
+              <h2>Inscritos</h2>
+              <br />
+              {registrationsList.length === 0 ? (
+                <p>No hay inscritos aún.</p>
+              ) : (
+                <div class="table-wrapper">
+                  <table class="registrations-table">
+                    <thead>
+                      <tr>
+                        <th>Nombre</th>
+                        <th>Email</th>
+                        <th>Teléfono</th>
+                        <th>Fecha</th>
+                        <th>Ticket</th>
+                        <th>Estado</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {registrationsList.map((r) => (
+                        <tr key={r.id}>
+                          <td>{r.full_name}</td>
+                          <td>{r.email}</td>
+                          <td>{r.phone || "-"}</td>
+                          <td>
+                            {new Date(r.created_at).toLocaleString("es-CO")}
+                          </td>
+                          <td>{r.ticket_number}</td>
+                          <td>
+                            <span class={`status status--${r.status}`}>
+                              {r.status}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {/* Bloque de ganancias: visible siempre que el organizador vea las inscripciones */}
+              <div class="earnings-section" style="margin-top:1rem;">
+                <h3>Ganancias</h3>
+                <p class="earnings-total">
+                  Entradas confirmadas: <strong>{confirmedCount}</strong>
+                </p>
+
+                <div class="earnings-grid">
+                  <div class="earnings-card earnings-card--gross">
+                    <div class="card-meta">
+                      <svg
+                        width="18"
+                        height="18"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        aria-hidden="true"
+                      >
+                        <path
+                          d="M12 1v22"
+                          stroke="currentColor"
+                          stroke-width="1.5"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                        />
+                      </svg>
+                      <span class="card-title">Total bruto</span>
+                    </div>
+                    <div class="card-value">
+                      {event.is_free ? "Gratis" : `$${formattedEarnings} COP`}
+                    </div>
+                  </div>
+
+                  <div class="earnings-card earnings-card--fee">
+                    <div class="card-meta">
+                      <svg
+                        width="18"
+                        height="18"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        aria-hidden="true"
+                      >
+                        <>
+                          <path
+                            d="M12 3v4"
+                            stroke="currentColor"
+                            stroke-width="1.5"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                          />
+                          <path
+                            d="M6 7h12"
+                            stroke="currentColor"
+                            stroke-width="1.5"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                          />
+                        </>
+                      </svg>
+                      <span class="card-title">Plataforma (5%)</span>
+                    </div>
+                    <div class="card-value">
+                      {event.is_free ? "N/A" : `$${formattedPlatformFee} COP`}
+                    </div>
+                  </div>
+
+                  <div class="earnings-card earnings-card--net">
+                    <div class="card-meta">
+                      <svg
+                        width="18"
+                        height="18"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        aria-hidden="true"
+                      >
+                        <path
+                          d="M20 6L9 17l-5-5"
+                          stroke="currentColor"
+                          stroke-width="1.5"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                        />
+                      </svg>
+                      <span class="card-title">Total neto</span>
+                    </div>
+                    <div class="card-value">
+                      {event.is_free
+                        ? "Gratis"
+                        : `$${formattedNetEarnings} COP`}
+                    </div>
+                  </div>
+                </div>
+
+                <p class="earnings-note">
+                  La plataforma se queda con el 5% de cada entrada.
+                </p>
+              </div>
+            </div>
+          )
+        }
+
+        <br />
+        <br />
 
         <div class="event-detail-container">
           <!-- Carrusel de imágenes del evento -->
@@ -416,46 +563,6 @@ if (showRegistrations) {
                 <div class="event-location-map">
                   <h2>Ubicación</h2>
                   <div id="event-map" class="map-container" />
-                </div>
-              )
-            }
-            {
-              showRegistrations && (
-                <div class="registrations-table-section">
-                  <h2>Inscritos</h2>
-                  <br />
-                  {registrationsList.length === 0 ? (
-                    <p>No hay inscritos aún.</p>
-                  ) : (
-                    <div class="table-wrapper">
-                      <table class="registrations-table">
-                        <thead>
-                          <tr>
-                            <th>Nombre</th>
-                            <th>Email</th>
-                            <th>Teléfono</th>
-                            <th>Fecha</th>
-                            <th>Ticket</th>
-                            <th>Estado</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {registrationsList.map((r) => (
-                            <tr key={r.id}>
-                              <td>{r.full_name}</td>
-                              <td>{r.email}</td>
-                              <td>{r.phone || "-"}</td>
-                              <td>
-                                {new Date(r.created_at).toLocaleString("es-CO")}
-                              </td>
-                              <td>{r.ticket_number}</td>
-                              <td>{r.status}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
                 </div>
               )
             }
@@ -1189,6 +1296,117 @@ if (showRegistrations) {
 
   .registrations-table tbody tr:hover {
     background: rgba(255, 255, 255, 0.01);
+  }
+
+  .earnings-section {
+    margin-top: 1.25rem;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.04);
+    border-radius: 12px;
+    padding: 1rem 1.25rem;
+    color: var(--text);
+  }
+
+  .earnings-section .earnings-note {
+    color: var(--text-muted);
+    margin-top: 0.25rem;
+    font-size: 0.95rem;
+  }
+
+  .earnings-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.75rem;
+    margin-top: 0.75rem;
+  }
+
+  .earnings-card {
+    background: linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.01),
+      rgba(255, 255, 255, 0)
+    );
+    border: 1px solid rgba(255, 255, 255, 0.03);
+    padding: 0.6rem 0.8rem;
+    border-radius: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+
+  .earnings-card .card-meta {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--text-muted);
+    font-size: 0.95rem;
+  }
+
+  .earnings-card .card-value {
+    font-size: 1.0625rem;
+    font-weight: 600;
+    color: var(--violet-300);
+  }
+
+  .earnings-card--fee .card-value {
+    color: var(--text-muted);
+  }
+
+  .earnings-card--net .card-value {
+    color: var(--success);
+  }
+
+  @media (max-width: 720px) {
+    .earnings-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  .earnings-section h3 {
+    margin: 0 0 0.5rem 0;
+    font-size: 1.125rem;
+    color: var(--text);
+  }
+
+  .earnings-section p {
+    margin: 0.25rem 0;
+    color: var(--text-muted);
+  }
+
+  .earnings-section .earnings-total strong {
+    color: var(--violet-300);
+    font-size: 1rem;
+  }
+
+  /* Status badges */
+  .status {
+    display: inline-block;
+    padding: 0.2rem 0.6rem;
+    border-radius: 999px;
+    font-weight: 700;
+    font-size: 0.85rem;
+    text-transform: capitalize;
+    color: var(--text);
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid transparent;
+  }
+
+  .status--confirmed {
+    background: rgba(16, 185, 129, 0.1);
+    color: #10b981;
+    border-color: rgba(16, 185, 129, 0.18);
+  }
+
+  .status--cancelled {
+    background: rgba(239, 68, 68, 0.08);
+    color: #ef4444;
+    border-color: rgba(239, 68, 68, 0.18);
+  }
+
+  .status--attended {
+    background: rgba(99, 102, 241, 0.08);
+    color: #6366f1;
+    border-color: rgba(99, 102, 241, 0.16);
   }
 
   @media (max-width: 968px) {

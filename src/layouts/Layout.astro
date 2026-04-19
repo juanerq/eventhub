@@ -66,6 +66,104 @@ const { title } = Astro.props;
 </html>
 
 <style is:global>
+	:root {
+		--violet-50: #faf5ff;
+		--violet-100: #f3e8ff;
+		--violet-200: #e9d5ff;
+		--violet-300: #d8b4fe;
+		--violet-400: #c084fc;
+		--violet-500: #a855f7;
+		--violet-600: #9333ea;
+		--violet-700: #7e22ce;
+		--violet-800: #6b21a8;
+		--violet-900: #581c87;
+		--violet-950: #3b0764;
+
+		--fuchsia-50: #fdf4ff;
+		--fuchsia-100: #fae8ff;
+		--fuchsia-200: #f5d0fe;
+		--fuchsia-300: #f0abfc;
+		--fuchsia-400: #e879f9;
+		--fuchsia-500: #d946ef;
+		--fuchsia-600: #c026d3;
+		--fuchsia-700: #a21caf;
+		--fuchsia-800: #86198f;
+		--fuchsia-900: #701a75;
+
+		--orange-50: #fff7ed;
+		--orange-100: #ffedd5;
+		--orange-200: #fed7aa;
+		--orange-300: #fdba74;
+		--orange-400: #fb923c;
+		--orange-500: #f97316;
+		--orange-600: #ea580c;
+		--orange-700: #c2410c;
+		--orange-800: #9a3412;
+		--orange-900: #7c2d12;
+
+		--cyan-50: #ecfeff;
+		--cyan-100: #cffafe;
+		--cyan-200: #a5f3fc;
+		--cyan-300: #67e8f9;
+		--cyan-400: #22d3ee;
+		--cyan-500: #06b6d4;
+		--cyan-600: #0891b2;
+		--cyan-700: #0e7490;
+		--cyan-800: #155e75;
+		--cyan-900: #164e63;
+
+		--emerald-50: #ecfdf5;
+		--emerald-100: #d1fae5;
+		--emerald-200: #a7f3d0;
+		--emerald-300: #6ee7b7;
+		--emerald-400: #34d399;
+		--emerald-500: #10b981;
+		--emerald-600: #059669;
+		--emerald-700: #047857;
+		--emerald-800: #065f46;
+		--emerald-900: #064e3b;
+
+		--navy-50: #f0f9ff;
+		--navy-100: #e0f2fe;
+		--navy-200: #bae6fd;
+		--navy-300: #7dd3fc;
+		--navy-400: #38bdf8;
+		--navy-500: #0ea5e9;
+		--navy-600: #0284c7;
+		--navy-700: #0369a1;
+		--navy-800: #075985;
+		--navy-900: #0c4a6e;
+		--navy-950: #082f49;
+
+		--slate-50: #f8fafc;
+		--slate-100: #f1f5f9;
+		--slate-200: #e2e8f0;
+		--slate-300: #cbd5e1;
+		--slate-400: #94a3b8;
+		--slate-500: #64748b;
+		--slate-600: #475569;
+		--slate-700: #334155;
+		--slate-800: #1e293b;
+		--slate-900: #0f172a;
+		--slate-950: #020617;
+
+		--primary: var(--violet-600);
+		--primary-hover: var(--violet-700);
+		--primary-dark: var(--violet-700);
+		--secondary: var(--fuchsia-500);
+		--accent: var(--fuchsia-500);
+		--accent-hover: var(--fuchsia-600);
+		--warm-accent: var(--orange-500);
+		--cool-accent: var(--cyan-400);
+		--dark: var(--slate-950);
+		--dark-light: var(--slate-900);
+		--background: var(--slate-950);
+		--background-light: var(--slate-900);
+		--text: var(--slate-50);
+		--text-muted: var(--slate-400);
+		--success: var(--emerald-500);
+		--border: rgba(255, 255, 255, 0.08);
+	}
 	* {
 		margin: 0;
 		padding: 0;
