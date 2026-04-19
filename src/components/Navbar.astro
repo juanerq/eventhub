@@ -648,4 +648,20 @@ const {
       closeMenu();
     }
   });
+  // Intercept logout forms to use fetch and redirect (prevents raw JSON response page)
+  const logoutForms = document.querySelectorAll(
+    'form[action="/api/auth/logout"]',
+  );
+  logoutForms.forEach((form) => {
+    form.addEventListener("submit", async (ev) => {
+      ev.preventDefault();
+      try {
+        await fetch("/api/auth/logout", { method: "POST" });
+      } catch (err) {
+        console.error("Logout error:", err);
+      } finally {
+        window.location.href = "/login";
+      }
+    });
+  });
 </script>

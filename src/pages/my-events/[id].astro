@@ -98,6 +98,24 @@ const categoryIcons: Record<string, string> = {
   health: "🏥",
   entertainment: "🎭",
 };
+// Mostrar inscripciones si el usuario es el organizador del evento
+const showRegistrations = Boolean(user && user.id === event.organizer_id);
+let registrationsList = [];
+if (showRegistrations) {
+  const { data: regs, error: regsError } = await supabase
+    .from("event_registrations")
+    .select(
+      "id, user_id, full_name, email, phone, created_at, ticket_number, status",
+    )
+    .eq("event_id", id)
+    .order("created_at", { ascending: false });
+
+  if (regsError) {
+    console.error("Error fetching registrations:", regsError);
+  } else {
+    registrationsList = regs || [];
+  }
+}
 ---
 
 <Layout title={event.title}>
@@ -401,158 +419,46 @@ const categoryIcons: Record<string, string> = {
                 </div>
               )
             }
-
-            <!-- Formulario de inscripción
-            <div class="registration-section">
-              {
-                isRegistered ? (
-                  <div class="already-registered">
-                    <div class="success-icon">✓</div>
-                    <h3>¡Ya estás inscrito!</h3>
-                    <p>
-                      Tu número de ticket:{" "}
-                      <strong>{registration.ticket_number}</strong>
-                    </p>
-                    <p class="registration-date">
-                      Registrado el{" "}
-                      {new Date(registration.created_at).toLocaleDateString(
-                        "es-CO",
-                      )}
-                    </p>
-                  </div>
-                ) : isFull ? (
-                  <div class="event-full">
-                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none">
-                      <circle
-                        cx="12"
-                        cy="12"
-                        r="10"
-                        stroke="currentColor"
-                        stroke-width="2"
-                      />
-                      <path
-                        d="M15 9l-6 6M9 9l6 6"
-                        stroke="currentColor"
-                        stroke-width="2"
-                        stroke-linecap="round"
-                      />
-                    </svg>
-                    <h3>Evento lleno</h3>
-                    <p>Lo sentimos, no hay cupos disponibles</p>
-                  </div>
-                ) : !user ? (
-                  <div class="login-required">
-                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none">
-                      <path
-                        d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"
-                        stroke="currentColor"
-                        stroke-width="2"
-                      />
-                      <circle
-                        cx="12"
-                        cy="7"
-                        r="4"
-                        stroke="currentColor"
-                        stroke-width="2"
-                      />
-                    </svg>
-                    <h3>Inicia sesión para inscribirte</h3>
-                    <a href="/login" class="btn-primary">
-                      Iniciar sesión
-                    </a>
-                  </div>
-                ) : (
-                  <form id="registration-form" class="registration-form">
-                    <h3>Inscríbete al evento</h3>
-
-                    <div class="form-group">
-                      <label for="full_name">Nombre completo *</label>
-                      <input
-                        type="text"
-                        id="full_name"
-                        name="full_name"
-                        value={user.user_metadata?.full_name || ""}
-                        required
-                        class="form-input"
-                      />
+            {
+              showRegistrations && (
+                <div class="registrations-table-section">
+                  <h2>Inscritos</h2>
+                  <br />
+                  {registrationsList.length === 0 ? (
+                    <p>No hay inscritos aún.</p>
+                  ) : (
+                    <div class="table-wrapper">
+                      <table class="registrations-table">
+                        <thead>
+                          <tr>
+                            <th>Nombre</th>
+                            <th>Email</th>
+                            <th>Teléfono</th>
+                            <th>Fecha</th>
+                            <th>Ticket</th>
+                            <th>Estado</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {registrationsList.map((r) => (
+                            <tr key={r.id}>
+                              <td>{r.full_name}</td>
+                              <td>{r.email}</td>
+                              <td>{r.phone || "-"}</td>
+                              <td>
+                                {new Date(r.created_at).toLocaleString("es-CO")}
+                              </td>
+                              <td>{r.ticket_number}</td>
+                              <td>{r.status}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
                     </div>
-
-                    <div class="form-group">
-                      <label for="email">Correo electrónico *</label>
-                      <input
-                        type="email"
-                        id="email"
-                        name="email"
-                        value={user.email || ""}
-                        required
-                        class="form-input"
-                      />
-                    </div>
-
-                    <div class="form-group">
-                      <label for="phone">Teléfono *</label>
-                      <input
-                        type="tel"
-                        id="phone"
-                        name="phone"
-                        placeholder="+57 300 123 4567"
-                        required
-                        class="form-input"
-                      />
-                    </div>
-
-                    <div class="form-group">
-                      <label for="additional_info">Información adicional</label>
-                      <textarea
-                        id="additional_info"
-                        name="additional_info"
-                        rows="3"
-                        placeholder="¿Algo que quieras que sepamos?"
-                        class="form-textarea"
-                      />
-                    </div>
-
-                    <button type="submit" class="btn-register" id="submit-btn">
-                      <svg
-                        width="20"
-                        height="20"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                      >
-                        <path
-                          d="M9 11l3 3L22 4"
-                          stroke="currentColor"
-                          stroke-width="2"
-                          stroke-linecap="round"
-                        />
-                        <path
-                          d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"
-                          stroke="currentColor"
-                          stroke-width="2"
-                        />
-                      </svg>
-                      <span>Confirmar inscripción</span>
-                    </button>
-
-                    <p class="form-note">
-                      Al inscribirte aceptas los términos y condiciones del
-                      evento
-                    </p>
-
-                    <div
-                      id="error-message"
-                      class="error-message"
-                      style="display: none;"
-                    />
-                    <div
-                      id="success-message"
-                      class="success-message"
-                      style="display: none;"
-                    />
-                  </form>
-                )
-              }
-            </div> -->
+                  )}
+                </div>
+              )
+            }
           </div>
         </div>
       </div>
@@ -1204,6 +1110,41 @@ const categoryIcons: Record<string, string> = {
     border: 1px solid rgba(16, 185, 129, 0.3);
     border-radius: 8px;
     color: #6ee7b7;
+  }
+
+  /* Tabla de inscritos */
+  .registrations-table-section {
+    margin-top: 2rem;
+  }
+
+  .table-wrapper {
+    overflow: auto;
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    background: rgba(255, 255, 255, 0.01);
+  }
+
+  .registrations-table {
+    width: 100%;
+    border-collapse: collapse;
+    min-width: 720px;
+  }
+
+  .registrations-table thead {
+    background: rgba(255, 255, 255, 0.02);
+  }
+
+  .registrations-table th,
+  .registrations-table td {
+    padding: 0.75rem 1rem;
+    text-align: left;
+    color: var(--text-muted);
+    font-size: 0.95rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+  }
+
+  .registrations-table tbody tr:hover {
+    background: rgba(255, 255, 255, 0.01);
   }
 
   @media (max-width: 968px) {
